@@ -13,6 +13,7 @@
 # Test output
 *.tar
 /output/
+coverage*.out
 
 # Build cache
 /dist/
