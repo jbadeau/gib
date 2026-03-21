@@ -1,0 +1,16 @@
+apiVersion: jib/v1alpha1
+kind: BuildFile
+from:
+  image: "busybox"
+entrypoint:
+  - "/bin/sh"
+  - "/app/run.sh"
+workingDirectory: "/app"
+layers:
+  entries:
+    - name: "app"
+      files:
+        - src: "."
+          dest: "/app"
+          excludes:
+            - "jib.yaml"

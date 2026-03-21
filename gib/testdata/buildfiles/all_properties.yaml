@@ -1,0 +1,48 @@
+apiVersion: jib/v1alpha1
+kind: BuildFile
+from:
+  image: "ubuntu:22.04"
+  platforms:
+    - architecture: "amd64"
+      os: "linux"
+    - architecture: "arm64"
+      os: "linux"
+creationTime: "2000"
+format: Docker
+environment:
+  KEY1: "val1"
+  KEY2: "val2"
+labels:
+  label1: "value1"
+  label2: "value2"
+volumes:
+  - "/vol1"
+  - "/vol2"
+exposedPorts:
+  - "8080"
+  - "123/udp"
+user: "customUser"
+workingDirectory: "/home"
+entrypoint:
+  - "sh"
+  - "script.sh"
+cmd:
+  - "--param"
+layers:
+  properties:
+    filePermissions: "644"
+    directoryPermissions: "755"
+    user: "0"
+    group: "0"
+    timestamp: "1000"
+  entries:
+    - name: "scripts"
+      files:
+        - src: "scripts"
+          dest: "/app/scripts"
+    - name: "images"
+      properties:
+        filePermissions: "444"
+      files:
+        - src: "images"
+          dest: "/app/images"

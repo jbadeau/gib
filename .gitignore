@@ -1,0 +1,18 @@
+# Binaries
+/bin/
+/cmd/gcb/gcb
+*.exe
+
+# IDE
+.idea/
+.claude/
+
+# OS
+.DS_Store
+
+# Test output
+*.tar
+/output/
+
+# Build cache
+/dist/
