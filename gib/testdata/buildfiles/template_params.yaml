@@ -1,7 +1,7 @@
 apiVersion: jib/v1alpha1
 kind: BuildFile
 from:
-  image: "$${baseImage}"
+  image: "${baseImage}"
 environment:
-  VERSION: "$${version}"
-user: "$${user}"
+  VERSION: "${version}"
+user: "${user}"

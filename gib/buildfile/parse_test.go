@@ -138,21 +138,27 @@ func TestSubstituteParams_NoParams(t *testing.T) {
 }
 
 func TestSubstituteParams_SingleParam(t *testing.T) {
-	result, err := substituteParams("image: $${name}", map[string]string{"name": "alpine"})
+	result, err := substituteParams("image: ${name}", map[string]string{"name": "alpine"})
 	require.NoError(t, err)
 	assert.Equal(t, "image: alpine", result)
 }
 
 func TestSubstituteParams_MultipleParams(t *testing.T) {
-	result, err := substituteParams("$${a}:$${b}", map[string]string{"a": "x", "b": "y"})
+	result, err := substituteParams("${a}:${b}", map[string]string{"a": "x", "b": "y"})
 	require.NoError(t, err)
 	assert.Equal(t, "x:y", result)
 }
 
 func TestSubstituteParams_UnclosedBrace(t *testing.T) {
-	_, err := substituteParams("$${unclosed", nil)
+	_, err := substituteParams("${unclosed", nil)
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "unclosed")
+}
+
+func TestSubstituteParams_EscapedParam(t *testing.T) {
+	result, err := substituteParams("literal: $${name}", map[string]string{"name": "alpine"})
+	require.NoError(t, err)
+	assert.Equal(t, "literal: ${name}", result)
 }
 
 // --- Validation tests ported from Jib's BuildFileSpecTest ---

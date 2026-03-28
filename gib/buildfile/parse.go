@@ -174,18 +174,19 @@ func validateOctalPermissions(perm, field string) error {
 	return nil
 }
 
-// substituteParams replaces $${paramName} with values from the params map.
-// Escaped $$$${...} produces a literal $${...}.
+// substituteParams replaces ${paramName} with values from the params map.
+// Compatible with Jib CLI template parameter syntax.
+// Escaped $${...} produces a literal ${...}.
 func substituteParams(content string, params map[string]string) (string, error) {
-	if len(params) == 0 && !strings.Contains(content, "$${") {
+	if len(params) == 0 && !strings.Contains(content, "${") {
 		return content, nil
 	}
 
 	var result strings.Builder
 	i := 0
 	for i < len(content) {
-		// Look for $${
-		idx := strings.Index(content[i:], "$${")
+		// Look for ${
+		idx := strings.Index(content[i:], "${")
 		if idx == -1 {
 			result.WriteString(content[i:])
 			break
@@ -194,15 +195,15 @@ func substituteParams(content string, params map[string]string) (string, error) 
 		// Write everything before the match
 		result.WriteString(content[i : i+idx])
 
-		// Check for escaped $$$${
+		// Check for escaped $${
 		if idx > 0 && content[i+idx-1] == '$' {
-			// This is an escaped $$$${...} -> produce literal $${...}
+			// This is an escaped $${...} -> produce literal ${...}
 			// Remove the extra $ we already wrote
 			s := result.String()
 			result.Reset()
 			result.WriteString(s[:len(s)-1]) // remove trailing $
-			result.WriteString("$${")
-			i = i + idx + 3
+			result.WriteString("${")
+			i = i + idx + 2
 			// Find closing }
 			end := strings.Index(content[i:], "}")
 			if end == -1 {
@@ -214,7 +215,7 @@ func substituteParams(content string, params map[string]string) (string, error) 
 		}
 
 		// Find closing }
-		paramStart := i + idx + 3
+		paramStart := i + idx + 2
 		end := strings.Index(content[paramStart:], "}")
 		if end == -1 {
 			return "", fmt.Errorf("unclosed template parameter at position %d", i+idx)
