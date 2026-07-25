@@ -211,3 +211,25 @@ func projectDir(t *testing.T) string {
 	require.NoError(t, err)
 	return dir
 }
+
+func TestConvert_BaseImageSchemes(t *testing.T) {
+	build := func(image string) (err error) {
+		spec := &BuildFileSpec{APIVersion: "v1alpha1", Kind: "BuildFile"}
+		if image != "" {
+			spec.From = &BaseImageSpec{Image: image}
+		}
+		_, err = Convert(spec, "/ctx", nil)
+		return err
+	}
+
+	assert.NoError(t, build(""))                       // no from -> scratch
+	assert.NoError(t, build("scratch"))                // explicit scratch
+	assert.NoError(t, build("tar://base/image.tar"))   // tar base, relative
+	assert.NoError(t, build("tar:///abs/image.tar"))   // tar base, absolute
+	assert.NoError(t, build("registry://alpine:3.18")) // explicit registry scheme
+	assert.NoError(t, build("alpine:3.18"))            // implicit registry
+
+	err := build("docker://alpine:3.18") // daemon bases are unsupported
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "docker://")
+}

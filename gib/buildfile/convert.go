@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/jbadeau/gib"
@@ -23,8 +24,23 @@ type ConvertOptions struct {
 func Convert(spec *BuildFileSpec, contextDir string, opts *ConvertOptions) (*gib.ContainerBuilder, error) {
 	var builder *gib.ContainerBuilder
 
-	// Base image
-	if spec.From != nil && spec.From.Image != "" {
+	// Base image. Jib's from.image accepts scheme prefixes — registry://
+	// (the default), tar:// (an image tarball on disk), docker:// (daemon)
+	// — plus the literal "scratch". gib matches that, minus docker://,
+	// which a daemonless builder cannot support. A relative tar path is
+	// resolved against the context directory, like layer sources.
+	switch {
+	case spec.From == nil || spec.From.Image == "" || spec.From.Image == "scratch":
+		builder = gib.FromScratch()
+	case strings.HasPrefix(spec.From.Image, "tar://"):
+		tarPath := strings.TrimPrefix(spec.From.Image, "tar://")
+		if !filepath.IsAbs(tarPath) {
+			tarPath = filepath.Join(contextDir, tarPath)
+		}
+		builder = gib.FromImage(gib.TarSource(tarPath))
+	case strings.HasPrefix(spec.From.Image, "docker://"):
+		return nil, fmt.Errorf("from.image %q: docker:// bases need a Docker daemon, which gib does not use; export the image to a tarball and use tar:// instead", spec.From.Image)
+	default:
 		var sourceOpts []gib.ImageSourceOption
 		if opts != nil {
 			if opts.FromUsername != "" && opts.FromPassword != "" {
@@ -36,9 +52,7 @@ func Convert(spec *BuildFileSpec, contextDir string, opts *ConvertOptions) (*gib
 				sourceOpts = append(sourceOpts, gib.WithSourceInsecure())
 			}
 		}
-		builder = gib.From(spec.From.Image, sourceOpts...)
-	} else {
-		builder = gib.FromScratch()
+		builder = gib.From(strings.TrimPrefix(spec.From.Image, "registry://"), sourceOpts...)
 	}
 
 	// Platforms
