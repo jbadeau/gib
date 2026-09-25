@@ -61,6 +61,43 @@ gib build --target=my-registry.example.com/my-app:latest
 gib build --target=tar://my-image.tar
 ```
 
+The tar is both an OCI image layout and a `docker save` archive, the way
+Docker's own `save` writes one: every blob once under `blobs/sha256/`,
+the image's manifest among them with its exact bytes, `index.json` naming
+it and `manifest.json` naming its config and layers. `docker load` reads
+it, and `gib push` pushes the very manifest the build wrote.
+
+### Push an image tarball
+
+```sh
+gib push my-image.tar my-registry.example.com/my-app:1.4.0
+```
+
+Build once, push later: `push` builds nothing. It pushes every blob and
+every manifest with the bytes the tarball holds, so the digest the
+registry reports, printed on stdout, is the digest the tarball was
+written with; only the tag is new.
+
+- **OCI image layout** (`index.json`, as `gib build`, `crane pull
+  --format=oci` or apko write): an `index.json` naming one image pushes
+  that image; one naming an index pushes the index, children and all.
+  Blobs are found by their content wherever the tarball keeps them, so
+  apko's tarball, whose `index.json` is itself the index of every
+  architecture it built, is pushed as that multi-arch index.
+- **docker-save archive** (`manifest.json` only): the config and layers
+  are pushed as they are, under the Docker schema 2 manifest describing
+  them, the manifest `crane push` or a registry pull of `docker load`'s
+  image would carry. An archive of compressed layers pushes those bytes;
+  one of uncompressed layers has them compressed first, so its digest is
+  that of the compressed image.
+
+The reference names a tag; one naming a digest is refused, the digest
+being the tarball's. A tarball holding several tagged images is pushed
+only when exactly one of them is tagged in the reference's repository.
+Credentials resolve as for `gib build`: `--to-username`/`--to-password`,
+then `--username`/`--password`, then `--to-credential-helper` or
+`--credential-helper`, then the Docker config (`~/.docker/config.json`).
+
 ### Minimal `jib.yaml`
 
 ```yaml
@@ -99,6 +136,17 @@ gib build --target <image> [options]
 | `--username / --password` | Registry credentials |
 
 Run `gib build --help` for the full list of options.
+
+```
+gib push <tarball> <reference> [options]
+```
+
+| Option | Description |
+|---|---|
+| `--to-username / --to-password` | Target registry credentials |
+| `--to-credential-helper` | Target Docker credential helper suffix |
+| `--username / --password`, `--credential-helper` | Fallbacks for the above |
+| `--allow-insecure-registries` | Allow HTTP registries |
 
 ## Go Library
 
