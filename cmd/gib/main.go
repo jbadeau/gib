@@ -15,7 +15,7 @@ func main() {
 		Long:  "Build container images without Docker, compatible with jib.yaml build files.",
 	}
 
-	root.AddCommand(newBuildCmd())
+	root.AddCommand(newBuildCmd(), newPushCmd())
 
 	if err := fang.Execute(context.Background(), root, fang.WithNotifySignal(os.Interrupt)); err != nil {
 		os.Exit(1)

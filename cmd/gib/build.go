@@ -264,26 +264,7 @@ func runBuild(cmd *cobra.Command, f *buildFlags) error {
 			opts = append(opts, gib.WithSendCredentialsOverHTTP(true))
 		}
 
-		// Resolve credentials for target
-		username := f.toUsername
-		password := f.toPassword
-		if username == "" {
-			username = f.username
-		}
-		if password == "" {
-			password = f.password
-		}
-		if username != "" && password != "" {
-			opts = append(opts, gib.WithCredentials(username, password))
-		}
-
-		credHelper := f.toCredentialHelper
-		if credHelper == "" {
-			credHelper = f.credentialHelper
-		}
-		if credHelper != "" {
-			opts = append(opts, gib.WithCredentialHelper(credHelper))
-		}
+		opts = append(opts, targetOptions(f.username, f.password, f.credentialHelper, f.toUsername, f.toPassword, f.toCredentialHelper)...)
 
 		target = gib.ToRegistry(f.target, opts...)
 	}
