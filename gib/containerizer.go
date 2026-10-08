@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"runtime/debug"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
@@ -31,6 +32,10 @@ type Containerizer struct {
 	allowInsecureRegistries bool
 	sendCredentialsOverHTTP bool
 	remoteOptions           []remote.Option
+	// toolName and toolVersion name what built the image in each layer's
+	// history, as Jib's Containerizer.setToolName and setToolVersion do.
+	toolName    string
+	toolVersion string
 }
 
 // ToRegistry creates a Containerizer that pushes to a registry.
@@ -38,6 +43,8 @@ func ToRegistry(ref string, opts ...ContainerizerOption) *Containerizer {
 	c := &Containerizer{
 		targetType:  "registry",
 		registryRef: ref,
+		toolName:    "gib",
+		toolVersion: version(),
 	}
 	for _, opt := range opts {
 		opt(c)
@@ -48,13 +55,43 @@ func ToRegistry(ref string, opts ...ContainerizerOption) *Containerizer {
 // ToTar creates a Containerizer that writes a tar file.
 func ToTar(path string, opts ...ContainerizerOption) *Containerizer {
 	c := &Containerizer{
-		targetType: "tar",
-		tarPath:    path,
+		targetType:  "tar",
+		tarPath:     path,
+		toolName:    "gib",
+		toolVersion: version(),
 	}
 	for _, opt := range opts {
 		opt(c)
 	}
 	return c
+}
+
+// WithToolName sets the tool named in each layer's history, "gib" by
+// default.
+func WithToolName(name string) ContainerizerOption {
+	return func(c *Containerizer) { c.toolName = name }
+}
+
+// WithToolVersion sets the version of the tool named in each layer's
+// history, gib's own by default.
+func WithToolVersion(v string) ContainerizerOption {
+	return func(c *Containerizer) { c.toolVersion = v }
+}
+
+// version is gib's module version, as the binary or program built with
+// it records it.
+func version() string {
+	if info, ok := debug.ReadBuildInfo(); ok {
+		if info.Main.Path == "github.com/jbadeau/gib" && info.Main.Version != "" {
+			return info.Main.Version
+		}
+		for _, d := range info.Deps {
+			if d.Path == "github.com/jbadeau/gib" {
+				return d.Version
+			}
+		}
+	}
+	return "unknown"
 }
 
 // WithAdditionalTag adds an additional tag.

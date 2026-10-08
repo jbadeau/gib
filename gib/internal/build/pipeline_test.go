@@ -206,3 +206,36 @@ func testdataDir(t *testing.T) string {
 	require.NoError(t, err)
 	return dir
 }
+
+func TestExecute_TheSameBuildIsTheSameImage(t *testing.T) {
+	req := Request{BaseImage: empty.Image, Environment: map[string]string{"D": "4", "A": "1", "C": "3", "B": "2", "E": "5"}}
+	first, err := Execute(context.Background(), req)
+	require.NoError(t, err)
+	want, err := first.Digest()
+	require.NoError(t, err)
+	for range 20 {
+		img, err := Execute(context.Background(), req)
+		require.NoError(t, err)
+		got, err := img.Digest()
+		require.NoError(t, err)
+		require.Equal(t, want, got)
+	}
+}
+
+func TestExecute_RefusesWhatJibRefuses(t *testing.T) {
+	malformed, err := mutate.ConfigFile(empty.Image, &v1.ConfigFile{Config: v1.Config{Env: []string{"NOEQ"}}})
+	require.NoError(t, err)
+	tests := map[string]struct {
+		req Request
+		err string
+	}{
+		"an environment name with =":         {Request{BaseImage: empty.Image, Environment: map[string]string{"A=B": "v"}}, "cannot contain '='"},
+		"a base environment entry without =": {Request{BaseImage: malformed}, `"NOEQ" is not NAME=VALUE`},
+	}
+	for name, tt := range tests {
+		t.Run(name, func(t *testing.T) {
+			_, err := Execute(context.Background(), tt.req)
+			require.ErrorContains(t, err, tt.err)
+		})
+	}
+}
