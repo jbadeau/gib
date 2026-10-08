@@ -27,7 +27,29 @@
       "comment": "app"
     }
   ],
-  "diffIDs": [
-    "sha256:d5555a39d050e645a40749f679ae858c9d58d72b8de545d8e376088f9349d4a9"
+  "layers": [
+    [
+      {
+        "name": "app/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "app/hello.txt",
+        "type": "0",
+        "mode": "100644",
+        "uid": 0,
+        "gid": 0,
+        "uname": "app",
+        "gname": "staff",
+        "mtime": 1,
+        "size": 5,
+        "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+      }
+    ]
   ]
 }

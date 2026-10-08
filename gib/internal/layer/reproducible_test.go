@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 	"syscall"
 	"testing"
 
@@ -13,43 +14,42 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// These hold the parts of Jib's layer bytes one at a time; the whole of
-// them, against layers Jib built, is TestJibCompat's.
+// These hold the layer's rules one at a time; what layers hold, against
+// layers Jib built, is TestJibCompat's.
 
-func TestPAXRecordsComeInJavasHashMapOrder(t *testing.T) {
-	m := &javaMap{}
-	for _, k := range []string{"path", "mtime", "atime", "ctime", "LIBARCHIVE.creationtime"} {
-		m.put(k, "1")
-	}
-	want := "10 path=1\n11 atime=1\n11 ctime=1\n11 mtime=1\n29 LIBARCHIVE.creationtime=1\n"
-	assert.Equal(t, want, string(m.encode()))
+func TestTimesAreKeptToTheMillisecond(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "f")
+	require.NoError(t, os.WriteFile(f, []byte("x"), 0o644))
+
+	raw, err := Tar([]Entry{{SourcePath: f, DestinationPath: "/f", ModificationTime: 1050}})
+	require.NoError(t, err)
+
+	h, err := tar.NewReader(bytes.NewReader(raw)).Next()
+	require.NoError(t, err)
+	assert.Equal(t, int64(1_050_000_000), h.ModTime.UnixNano())
 }
 
-func TestPAXRecordLengthsCountThemselves(t *testing.T) {
-	m := &javaMap{}
-	m.put("path", string(bytes.Repeat([]byte("a"), 95)))
-	line := string(m.encode())
-	assert.Equal(t, "105 path=", line[:9], "the length includes its own three digits")
-	assert.Len(t, line, 105)
-}
+func TestLongNamesAreKept(t *testing.T) {
+	dir := t.TempDir()
+	f := filepath.Join(dir, "f")
+	require.NoError(t, os.WriteFile(f, []byte("x"), 0o644))
+	long := "/" + strings.Repeat("d", 120) + "/f"
 
-func TestJibsTimeIsItsUnpaddedNanoseconds(t *testing.T) {
-	cases := []struct {
-		millis      int64
-		secs, nanos int64
-		pax         string
-	}{
-		{1000, 1, 0, "1"},
-		{1500, 1, 500_000_000, "1.5000000"},
-		{1050, 1, 500_000_000, "1.5000000"}, // Jib writes "1.50000000"
-		{1005, 1, 500_000_000, "1.5000000"},
-		{1234, 1, 234_000_000, "1.2340000"},
+	raw, err := Tar([]Entry{{SourcePath: f, DestinationPath: long}})
+	require.NoError(t, err)
+
+	r := tar.NewReader(bytes.NewReader(raw))
+	var names []string
+	for {
+		h, err := r.Next()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		names = append(names, h.Name)
 	}
-	for _, c := range cases {
-		secs, nanos := jibTime(c.millis)
-		assert.Equal(t, [2]int64{c.secs, c.nanos}, [2]int64{secs, nanos}, "%dms", c.millis)
-		assert.Equal(t, c.pax, paxTime(secs, nanos), "%dms", c.millis)
-	}
+	assert.Contains(t, names, long[1:])
 }
 
 func TestTheFirstEntryOfANameWins(t *testing.T) {

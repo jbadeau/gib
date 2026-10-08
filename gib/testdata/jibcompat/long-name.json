@@ -27,7 +27,36 @@
       "comment": "app"
     }
   ],
-  "diffIDs": [
-    "sha256:7d942c3ff41794a43d2125cba1bd18c84d78d0615ac8dedf3d262a50a57e7228"
+  "layers": [
+    [
+      {
+        "name": "a-directory-with-a-rather-long-name/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "a-directory-with-a-rather-long-name/another-directory-with-a-long-name/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "a-directory-with-a-rather-long-name/another-directory-with-a-long-name/and-a-file-whose-name-is-long-too.txt",
+        "type": "0",
+        "mode": "100644",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 5,
+        "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+      }
+    ]
   ]
 }

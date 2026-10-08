@@ -29,9 +29,9 @@ func newPathMatcher(glob string) (pathMatcher, error) {
 
 func (m pathMatcher) matches(path string) bool { return m.re.MatchString(path) }
 
-// javaDot is what "." matches in a Java regular expression: any
-// character but a line terminator.
-const javaDot = `[^\n\r\x{85}\x{2028}\x{2029}]`
+// anyChar is any character, line terminators included, which a name
+// may hold.
+const anyChar = `(?s:.)`
 
 // globToRegex translates a glob as the JDK's sun.nio.fs.Globs does for
 // Unix: '*' within a name, "**" across names, '?' one character of a
@@ -88,7 +88,7 @@ func globToRegex(glob string) (string, error) {
 			}
 		case '*':
 			if next(i) == '*' {
-				b.WriteString(javaDot + "*")
+				b.WriteString(anyChar + "*")
 				i++
 			} else {
 				b.WriteString("[^/]*")

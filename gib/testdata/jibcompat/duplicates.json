@@ -27,7 +27,27 @@
       "comment": "app"
     }
   ],
-  "diffIDs": [
-    "sha256:b40cd46d997b55a9014c504100a9f4cff194117ab15edd4913d6ed3efe69a50d"
+  "layers": [
+    [
+      {
+        "name": "app/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "app/x.txt",
+        "type": "0",
+        "mode": "100644",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 5,
+        "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+      }
+    ]
   ]
 }

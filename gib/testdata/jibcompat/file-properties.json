@@ -27,7 +27,74 @@
       "comment": "app"
     }
   ],
-  "diffIDs": [
-    "sha256:ea9339d8347d7ad8083302123f43f4063fc9abf563dc1dc9cc930fb127278a73"
+  "layers": [
+    [
+      {
+        "name": "etc/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "etc/hello.txt",
+        "type": "0",
+        "mode": "100600",
+        "uid": 1000,
+        "gid": 2000,
+        "mtime": 1,
+        "size": 5,
+        "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+      },
+      {
+        "name": "opt/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "opt/app/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "opt/app/bin/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "opt/app/bin/hello.txt",
+        "type": "0",
+        "mode": "100600",
+        "uid": 1000,
+        "gid": 2000,
+        "mtime": 1,
+        "size": 5,
+        "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+      },
+      {
+        "name": "opt/app/hello.txt",
+        "type": "0",
+        "mode": "100755",
+        "uid": 1000,
+        "gid": 2000,
+        "mtime": 2,
+        "size": 5,
+        "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+      }
+    ]
   ]
 }

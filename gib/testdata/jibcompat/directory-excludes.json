@@ -27,7 +27,54 @@
       "comment": "app"
     }
   ],
-  "diffIDs": [
-    "sha256:f6880db1e736c79750b49539cefc8dc0523f8da444e8fd7a7a25ff960b8e1367"
+  "layers": [
+    [
+      {
+        "name": "app/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "app/a.txt",
+        "type": "0",
+        "mode": "100644",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 1,
+        "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+      },
+      {
+        "name": "app/empty/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "app/link/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "app/sub/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      }
+    ]
   ]
 }

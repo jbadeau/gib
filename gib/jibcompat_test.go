@@ -4,8 +4,10 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/json"
 	"flag"
+	"fmt"
 	"io"
 	"os"
 	"os/exec"
@@ -18,6 +20,7 @@ import (
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/layout"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
@@ -257,7 +260,22 @@ type summary struct {
 	Created           string            `json:"created"`
 	Config            summaryConfig     `json:"config"`
 	History           []v1.History      `json:"history"`
-	DiffIDs           []string          `json:"diffIDs"`
+	Layers            [][]layerEntry    `json:"layers"`
+}
+
+// layerEntry is what a layer holds at a path: what Jib and gib must
+// agree on, though their tar bytes need not.
+type layerEntry struct {
+	Name   string `json:"name"`
+	Type   string `json:"type"`
+	Mode   string `json:"mode"`
+	UID    int    `json:"uid"`
+	GID    int    `json:"gid"`
+	Uname  string `json:"uname,omitempty"`
+	Gname  string `json:"gname,omitempty"`
+	Mtime  int64  `json:"mtime"`
+	Size   int64  `json:"size"`
+	SHA256 string `json:"sha256,omitempty"`
 }
 
 type summaryConfig struct {
@@ -277,7 +295,11 @@ var tool = regexp.MustCompile(`^(jib-cli|gib):.*$`)
 
 func summarize(t *testing.T, file string) []byte {
 	t.Helper()
-	manifest, cfgRaw := imageIn(t, file)
+	img := imageOf(t, file)
+	manifest, err := img.Manifest()
+	require.NoError(t, err)
+	cfgRaw, err := img.RawConfigFile()
+	require.NoError(t, err)
 	var cfg v1.ConfigFile
 	require.NoError(t, json.Unmarshal(cfgRaw, &cfg))
 	var top map[string]json.RawMessage
@@ -292,10 +314,14 @@ func summarize(t *testing.T, file string) []byte {
 		Architecture:      cfg.Architecture,
 		OS:                cfg.OS,
 		Created:           cfg.Created.UTC().Format(time.RFC3339Nano),
-		DiffIDs:           diffIDs(cfg.RootFS.DiffIDs),
 	}
 	for _, l := range manifest.Layers {
 		s.LayerMediaTypes = append(s.LayerMediaTypes, l.MediaType)
+	}
+	layers, err := img.Layers()
+	require.NoError(t, err)
+	for _, l := range layers {
+		s.Layers = append(s.Layers, entriesOf(t, l))
 	}
 	for _, h := range cfg.History {
 		h.CreatedBy = tool.ReplaceAllString(h.CreatedBy, "<tool>")
@@ -325,47 +351,63 @@ func summarize(t *testing.T, file string) []byte {
 	return append(out, '\n')
 }
 
-// imageIn reads the one image of an image tarball, in either of Jib's
-// layouts: its manifest and its config's bytes.
-func imageIn(t *testing.T, file string) (*v1.Manifest, []byte) {
+// imageOf reads the one image of an image tarball, in either of Jib's
+// layouts: a docker-save archive, or an OCI image layout.
+func imageOf(t *testing.T, file string) v1.Image {
 	t.Helper()
-	files := map[string][]byte{}
+	if img, err := tarball.ImageFromPath(file, nil); err == nil {
+		return img
+	}
+	dir := t.TempDir()
 	f, err := os.Open(file)
 	require.NoError(t, err)
 	defer func() { _ = f.Close() }()
 	r := tar.NewReader(f)
 	for {
 		h, err := r.Next()
-		if err != nil {
+		if err == io.EOF {
 			break
 		}
-		var buf bytes.Buffer
-		_, err = buf.ReadFrom(r)
 		require.NoError(t, err)
-		files[h.Name] = buf.Bytes()
+		p := filepath.Join(dir, filepath.FromSlash(h.Name))
+		require.NoError(t, os.MkdirAll(filepath.Dir(p), 0o755))
+		b, err := io.ReadAll(r)
+		require.NoError(t, err)
+		require.NoError(t, os.WriteFile(p, b, 0o644))
 	}
-	if idx, ok := files["index.json"]; ok {
-		var index v1.IndexManifest
-		require.NoError(t, json.Unmarshal(idx, &index))
-		raw := files["blobs/sha256/"+index.Manifests[0].Digest.Hex]
-		var m v1.Manifest
-		require.NoError(t, json.Unmarshal(raw, &m))
-		return &m, files["blobs/sha256/"+m.Config.Digest.Hex]
-	}
-	img, err := tarball.ImageFromPath(file, nil)
+	idx, err := layout.ImageIndexFromPath(dir)
 	require.NoError(t, err)
-	m, err := img.Manifest()
+	m, err := idx.IndexManifest()
 	require.NoError(t, err)
-	cfg, err := img.RawConfigFile()
+	img, err := idx.Image(m.Manifests[0].Digest)
 	require.NoError(t, err)
-	return m, cfg
+	return img
 }
 
-func diffIDs(hs []v1.Hash) []string {
-	out := []string{}
-	for _, h := range hs {
-		out = append(out, h.String())
+func entriesOf(t *testing.T, l v1.Layer) []layerEntry {
+	t.Helper()
+	rc, err := l.Uncompressed()
+	require.NoError(t, err)
+	defer func() { _ = rc.Close() }()
+	r := tar.NewReader(rc)
+	var out []layerEntry
+	for {
+		h, err := r.Next()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		e := layerEntry{Name: h.Name, Type: string(h.Typeflag), Mode: fmt.Sprintf("%o", h.Mode), UID: h.Uid, GID: h.Gid,
+			Uname: h.Uname, Gname: h.Gname, Mtime: h.ModTime.Unix(), Size: h.Size}
+		if h.Typeflag == tar.TypeReg {
+			sum := sha256.New()
+			_, err := io.Copy(sum, r)
+			require.NoError(t, err)
+			e.SHA256 = fmt.Sprintf("%x", sum.Sum(nil))
+		}
+		out = append(out, e)
 	}
+	sort.Slice(out, func(i, j int) bool { return out[i].Name < out[j].Name })
 	return out
 }
 

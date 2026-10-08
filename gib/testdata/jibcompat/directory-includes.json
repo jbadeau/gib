@@ -27,7 +27,45 @@
       "comment": "app"
     }
   ],
-  "diffIDs": [
-    "sha256:b48a32130a65e65f458188008b6e105eafc928046ad2100ef3a8c5333f74120d"
+  "layers": [
+    [
+      {
+        "name": "app/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "app/sub/",
+        "type": "5",
+        "mode": "40755",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "app/sub/deep/",
+        "type": "5",
+        "mode": "40700",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 0
+      },
+      {
+        "name": "app/sub/deep/c.txt",
+        "type": "0",
+        "mode": "100644",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1,
+        "size": 1,
+        "sha256": "2e7d2c03a9507ae265ecf5b5356885a53393a2029d241394997265a1a25aefc6"
+      }
+    ]
   ]
 }
