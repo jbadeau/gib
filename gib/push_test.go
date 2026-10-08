@@ -246,6 +246,32 @@ func TestPush_GibsOwnTarIsPushedWithTheDigestItsBuildReports(t *testing.T) {
 	}
 }
 
+func TestPush_AnImageBuiltForAPlatformIsPushedForIt(t *testing.T) {
+	for _, format := range []ImageFormat{DockerFormat, OCIFormat} {
+		t.Run(format.String(), func(t *testing.T) {
+			file := filepath.Join(t.TempDir(), "image.tar")
+			built, err := FromScratch().AddPlatform("arm64", "linux").SetEntrypoint("/app").SetFormat(format).
+				Containerize(context.Background(), ToTar(file, WithTarImageName("acme/app:latest")))
+			require.NoError(t, err)
+			ref := serve(t) + "/acme/app:1.4.0"
+
+			_, err = push(t, file, ref)
+			require.NoError(t, err)
+
+			r, err := name.ParseReference(ref)
+			require.NoError(t, err)
+			img, err := remote.Image(r)
+			require.NoError(t, err)
+			digest, err := img.Digest()
+			require.NoError(t, err)
+			assert.Equal(t, built.Digest, digest)
+			cfg, err := img.ConfigFile()
+			require.NoError(t, err)
+			assert.Equal(t, "linux/arm64", cfg.OS+"/"+cfg.Architecture)
+		})
+	}
+}
+
 func TestGibsTarIsLoadableAsADockerSaveArchive(t *testing.T) {
 	src := filepath.Join(t.TempDir(), "hello.txt")
 	require.NoError(t, os.WriteFile(src, []byte("hello"), 0o644))
