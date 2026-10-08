@@ -73,6 +73,70 @@ layers:
       files:
         - {src: dir, dest: /none, includes: ["**/*.nomatch"]}
 `,
+	"file-properties": `
+layers:
+  properties: {filePermissions: "600", user: "1000", group: "2000", timestamp: "1050"}
+  entries:
+    - name: app
+      files:
+        - {src: hello.txt, dest: /opt/app/bin/hello.txt}
+        - {src: hello.txt, dest: /opt/app/hello.txt, properties: {filePermissions: "755", timestamp: "2000"}}
+        - {src: hello.txt, dest: /etc/hello.txt}
+`,
+	"named-owners": `
+layers:
+  entries:
+    - name: app
+      properties: {user: app, group: staff}
+      files:
+        - {src: hello.txt, dest: /app/hello.txt}
+`,
+	"long-name": `
+layers:
+  entries:
+    - name: app
+      files:
+        - {src: hello.txt, dest: /a-directory-with-a-rather-long-name/another-directory-with-a-long-name/and-a-file-whose-name-is-long-too.txt}
+`,
+	"duplicates": `
+layers:
+  entries:
+    - name: app
+      files:
+        - {src: hello.txt, dest: /app/x.txt}
+        - {src: dir/a.txt, dest: /app/x.txt}
+`,
+	"directory": `
+layers:
+  entries:
+    - name: app
+      properties: {filePermissions: "640", directoryPermissions: "700", user: "1000", timestamp: "5000"}
+      files:
+        - {src: dir, dest: /data/d}
+`,
+	"directory-excludes": `
+layers:
+  entries:
+    - name: app
+      files:
+        - {src: dir, dest: /app, excludes: ["**/sub/", "**/*.me"]}
+`,
+	"directory-includes": `
+layers:
+  entries:
+    - name: app
+      properties: {directoryPermissions: "700"}
+      files:
+        - {src: dir, dest: /app, includes: ["**/deep/*.txt"]}
+`,
+	"file-to-directory": `
+layers:
+  entries:
+    - name: app
+      files:
+        - {src: hello.txt, dest: /opt/x/}
+        - {src: "${ctx}/dir/a.txt", dest: /opt/abs.txt}
+`,
 	"scratch": `
 layers:
   entries:
@@ -129,6 +193,12 @@ func jibContext(t *testing.T) string {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "hello.txt"), []byte("hello"), 0o644))
 	require.NoError(t, os.MkdirAll(filepath.Join(dir, "dir"), 0o755))
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "dir", "a.txt"), []byte("a"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dir", "b.me"), []byte("b"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "dir", "sub", "deep"), 0o755))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dir", "sub", "b.txt"), []byte("b"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "dir", "sub", "deep", "c.txt"), []byte("c"), 0o644))
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "dir", "empty"), 0o755))
+	require.NoError(t, os.Symlink("sub", filepath.Join(dir, "dir", "link")))
 	return dir
 }
 
@@ -152,7 +222,7 @@ func TestJibCompat(t *testing.T) {
 				if jib == "" {
 					jib = "jib"
 				}
-				cmd := exec.Command(jib, "build", "-b", file, "-c", ctx, "-t", "tar://"+out, "--name", "test/"+name, "-p", "base="+base)
+				cmd := exec.Command(jib, "build", "-b", file, "-c", ctx, "-t", "tar://"+out, "--name", "test/"+name, "-p", "base="+base, "-p", "ctx="+ctx)
 				msg, err := cmd.CombinedOutput()
 				require.NoError(t, err, string(msg))
 				require.NoError(t, os.MkdirAll(filepath.Dir(golden), 0o755))
@@ -160,7 +230,7 @@ func TestJibCompat(t *testing.T) {
 				return
 			}
 
-			spec, err := buildfile.Parse(file, map[string]string{"base": base})
+			spec, err := buildfile.Parse(file, map[string]string{"base": base, "ctx": ctx})
 			require.NoError(t, err)
 			b, err := buildfile.Convert(spec, ctx, nil)
 			require.NoError(t, err)
@@ -187,7 +257,7 @@ type summary struct {
 	Created           string            `json:"created"`
 	Config            summaryConfig     `json:"config"`
 	History           []v1.History      `json:"history"`
-	DiffIDs           int               `json:"diffIDs"`
+	DiffIDs           []string          `json:"diffIDs"`
 }
 
 type summaryConfig struct {
@@ -222,7 +292,7 @@ func summarize(t *testing.T, file string) []byte {
 		Architecture:      cfg.Architecture,
 		OS:                cfg.OS,
 		Created:           cfg.Created.UTC().Format(time.RFC3339Nano),
-		DiffIDs:           len(cfg.RootFS.DiffIDs),
+		DiffIDs:           diffIDs(cfg.RootFS.DiffIDs),
 	}
 	for _, l := range manifest.Layers {
 		s.LayerMediaTypes = append(s.LayerMediaTypes, l.MediaType)
@@ -289,6 +359,14 @@ func imageIn(t *testing.T, file string) (*v1.Manifest, []byte) {
 	cfg, err := img.RawConfigFile()
 	require.NoError(t, err)
 	return m, cfg
+}
+
+func diffIDs(hs []v1.Hash) []string {
+	out := []string{}
+	for _, h := range hs {
+		out = append(out, h.String())
+	}
+	return out
 }
 
 func keys(m map[string]struct{}) []string {

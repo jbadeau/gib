@@ -137,8 +137,8 @@ func TestExecute_TarRoundtrip(t *testing.T) {
 			names = append(names, hdr.Name)
 		}
 	}
-	assert.Contains(t, names, "/app/bar")
-	assert.Contains(t, names, "/app/foo")
+	assert.Contains(t, names, "app/bar")
+	assert.Contains(t, names, "app/foo")
 }
 
 func TestExecute_CreationTime(t *testing.T) {

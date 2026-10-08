@@ -46,8 +46,7 @@ func TestDefaultProperties(t *testing.T) {
 	props := defaultProperties()
 	assert.Equal(t, 0644, int(props.filePermissions))
 	assert.Equal(t, 0755, int(props.directoryPermissions))
-	assert.Equal(t, "0", props.user)
-	assert.Equal(t, "0", props.group)
+	assert.Equal(t, "", props.ownership(), "Jib's default ownership is none")
 	assert.Equal(t, int64(1000), props.timestamp)
 }
 
@@ -69,8 +68,9 @@ func TestMergeProperties_UserGroup(t *testing.T) {
 	base := defaultProperties()
 	override := &FilePropertiesSpec{User: "1000", Group: "2000"}
 	result := mergeProperties(base, override)
-	assert.Equal(t, "1000", result.user)
-	assert.Equal(t, "2000", result.group)
+	assert.Equal(t, "1000:2000", result.ownership())
+	assert.Equal(t, ":2000", mergeProperties(base, &FilePropertiesSpec{Group: "2000"}).ownership())
+	assert.Equal(t, "app", mergeProperties(base, &FilePropertiesSpec{User: "app"}).ownership())
 }
 
 func TestMergeProperties_Timestamp(t *testing.T) {
@@ -88,13 +88,12 @@ func TestMergeProperties_Cascading(t *testing.T) {
 	// Global -> Layer
 	afterLayer := mergeProperties(global, layerOverride)
 	assert.Equal(t, 0755, int(afterLayer.filePermissions))
-	assert.Equal(t, "100", afterLayer.user)
-	assert.Equal(t, "0", afterLayer.group) // unchanged
+	assert.Equal(t, "100", afterLayer.ownership())
 
 	// Layer -> Copy
 	afterCopy := mergeProperties(afterLayer, copyOverride)
 	assert.Equal(t, 0444, int(afterCopy.filePermissions)) // overridden
-	assert.Equal(t, "100", afterCopy.user)                // inherited from layer
+	assert.Equal(t, "100", afterCopy.ownership())         // inherited from layer
 }
 
 func TestParseTimestamp_Millis(t *testing.T) {
