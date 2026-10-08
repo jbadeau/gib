@@ -104,8 +104,8 @@ func newBuildCmd(args []string, stdin io.Reader) *cobra.Command {
 
 func runBuild(cmd *cobra.Command, f *buildFlags, args, positional []string, stdin io.Reader) error {
 	if f.version {
-		// Jib's build has no version of its own to print.
-		return nil
+		_, err := fmt.Fprintln(cmd.OutOrStdout(), gib.Version())
+		return err
 	}
 	if err := f.prompt(cmd, stdin); err != nil {
 		return err
@@ -138,7 +138,7 @@ func runBuild(cmd *cobra.Command, f *buildFlags, args, positional []string, stdi
 		return fail(fmt.Errorf("The Build File YAML either does not exist or cannot be opened for reading: %s", file)) //nolint:staticcheck // Jib's message
 	}
 	if !fi.Mode().IsRegular() {
-		return fail(fmt.Errorf("Build File YAML path is a not a file: %s", file)) //nolint:staticcheck // Jib's message
+		return fail(fmt.Errorf("Build File YAML path is not a file: %s", file)) //nolint:staticcheck // Jib's message
 	}
 	if fi, err := os.Stat(f.context); err != nil || !fi.IsDir() {
 		return fail(fmt.Errorf("contextRoot must be a directory, but %s is not.", f.context)) //nolint:staticcheck // Jib's message

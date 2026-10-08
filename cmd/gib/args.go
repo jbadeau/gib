@@ -197,7 +197,7 @@ func (k *keyValues) Type() string   { return "stringToString" }
 func (k *keyValues) Set(v string) error {
 	key, value, ok := strings.Cut(v, "=")
 	if !ok {
-		return fmt.Errorf("Value for option option '--%s' (%s) should be in KEY=VALUE format but was %s", k.name, k.label, v) //nolint:staticcheck // picocli's message
+		return fmt.Errorf("Value for option '--%s' (%s) should be in KEY=VALUE format but was %s", k.name, k.label, v) //nolint:staticcheck // picocli's message
 	}
 	k.m[key] = value
 	return nil

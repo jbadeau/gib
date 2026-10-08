@@ -155,11 +155,11 @@ func (s *registrySource) resolve(ctx context.Context, platforms []v1.Platform, s
 
 	desc, err := s.fromMirrors(ctx, ref, settings)
 	if desc == nil {
-		desc, err = get(ref, settings.options(ctx, ref, remote.WithAuth(authn.Anonymous)))
+		desc, err = get(ctx, ref, settings, remote.WithAuth(authn.Anonymous))
 		if unauthorized(err) {
 			log.log(LevelLifecycle, "The base image requires auth. Trying again for %s...", ref)
-			auth := remote.WithAuthFromKeychain(&keychain{rs: s.creds.retrievers(ref, log)})
-			desc, err = get(ref, settings.options(ctx, ref, auth))
+			auth := remote.WithAuthFromKeychain(s.creds.keychain(ref, log))
+			desc, err = get(ctx, ref, settings, auth)
 		}
 	}
 	if err != nil {
@@ -188,7 +188,7 @@ func (s *registrySource) fromMirrors(ctx context.Context, ref reference, setting
 		settings.log.log(LevelInfo, "trying mirror %s for the base image", m)
 		mr := ref
 		mr.registry = m
-		desc, err := get(mr, settings.options(ctx, mr, remote.WithAuth(authn.Anonymous)))
+		desc, err := get(ctx, mr, settings, remote.WithAuth(authn.Anonymous))
 		if err != nil {
 			settings.log.log(LevelDebug, "failed to get manifest from mirror %s: %s", m, err)
 			continue
@@ -199,12 +199,12 @@ func (s *registrySource) fromMirrors(ctx context.Context, ref reference, setting
 	return nil, nil
 }
 
-func get(ref reference, opts []remote.Option) (*remote.Descriptor, error) {
-	n, err := ref.name()
+func get(ctx context.Context, ref reference, settings registrySettings, auth remote.Option) (*remote.Descriptor, error) {
+	n, err := ref.name(settings.allowInsecure)
 	if err != nil {
 		return nil, err
 	}
-	return remote.Get(n, opts...)
+	return remote.Get(n, settings.options(ctx, ref, auth)...)
 }
 
 // unauthorized reports whether a registry refused err's request for its

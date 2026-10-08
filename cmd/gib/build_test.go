@@ -10,11 +10,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/google/go-containerregistry/pkg/registry"
+	"github.com/jbadeau/gib"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -92,7 +94,7 @@ func TestBuild_RefusesTheCommandLinesJibRefuses(t *testing.T) {
 		{[]string{"build", "-t", "x", "--verbosity", "loud"}, "Invalid value for option '--verbosity': expected one of [quiet, error, warn, lifecycle, info, debug] (case-sensitive) but was 'loud'"},
 		{[]string{"build", "-t", "x", "--console", "fancy"}, "Invalid value for option '--console': expected one of [auto, rich, plain] (case-sensitive) but was 'fancy'"},
 		{[]string{"build", "-t", "x", "--http-trace=most"}, "Invalid value for option '--http-trace': expected one of [off, config, all] (case-sensitive) but was 'most'"},
-		{[]string{"build", "-t", "x", "-p", "a"}, "Value for option option '--parameter' (<name>=<value>) should be in KEY=VALUE format but was a"},
+		{[]string{"build", "-t", "x", "-p", "a"}, "Value for option '--parameter' (<name>=<value>) should be in KEY=VALUE format but was a"},
 		{[]string{"build", "-t", "x", "--from", "alpine"}, "Unknown option: '--from'"},
 		{[]string{"build", "-t", "x", "--entrypoint", "/app"}, "Unknown option: '--entrypoint'"},
 		{[]string{"build", "-t", "x", "-x"}, "Unknown option: '-x'"},
@@ -148,7 +150,7 @@ func TestBuild_FailsAsJibFailsBeforeBuilding(t *testing.T) {
 		args []string
 		want string
 	}{
-		{[]string{"--name", "x", "-b", "p"}, "Build File YAML path is a not a file: p"},
+		{[]string{"--name", "x", "-b", "p"}, "Build File YAML path is not a file: p"},
 		{[]string{"--name", "x", "-b", "p/jib.yaml", "-c", "nope"}, "contextRoot must be a directory, but nope is not."},
 		{[]string{"-c", "p", "--name", "Bad Name"}, "Invalid image reference: Bad Name"},
 		{[]string{"--name", "x", "-c", "p", "--additional-tags", "bad tag"}, "invalid tag 'bad tag'"},
@@ -229,34 +231,29 @@ func TestBuild_PromptsForAPasswordGivenNone(t *testing.T) {
 	assert.Contains(t, out, "Using credentials from --username/--password for "+host+"/acme/app\n")
 }
 
-func TestBuild_LoadsADockerTargetWithDockerLoad(t *testing.T) {
+func TestBuild_LoadsADockerTargetIntoTheDaemon(t *testing.T) {
+	if err := exec.Command("docker", "info").Run(); err != nil {
+		t.Skip("no Docker daemon")
+	}
 	dir := project(t, appBuildFile)
-	bin := t.TempDir()
-	loaded := filepath.Join(bin, "loaded.tar")
-	script := "#!/bin/sh\ncase \"$1\" in\ninfo) echo '{\"OSType\":\"linux\",\"Architecture\":\"x86_64\"}' ;;\nload) cat > " + loaded + " ;;\nesac\n"
-	require.NoError(t, os.WriteFile(filepath.Join(bin, "docker"), []byte(script), 0o755))
-	t.Setenv("PATH", bin+string(os.PathListSeparator)+os.Getenv("PATH"))
+	t.Cleanup(func() { _ = exec.Command("docker", "rmi", "gib-test/cli:1").Run() })
 
-	code, out, errOut := runGib(t, dir, "", "build", "-t", "docker://acme/app:1", "-c", "p", "--image-metadata-out", "m.json")
+	code, out, errOut := runGib(t, dir, "", "build", "-t", "docker://gib-test/cli:1", "-c", "p", "--image-metadata-out", "m.json")
 
 	require.Equal(t, 0, code, errOut)
 	assert.Equal(t, "Getting scratch base image...\nBuilding app layer...\nLoading to Docker daemon...\n", out)
-	var m []struct{ RepoTags []string }
-	require.NoError(t, json.Unmarshal(tarFile(t, loaded, "manifest.json"), &m))
-	assert.Equal(t, []string{"acme/app:1"}, m[0].RepoTags)
+	require.NoError(t, exec.Command("docker", "image", "inspect", "gib-test/cli:1").Run())
 	meta, err := os.ReadFile(filepath.Join(dir, "m.json"))
 	require.NoError(t, err)
-	assert.Contains(t, string(meta), `"image":"acme/app:1"`)
+	assert.Contains(t, string(meta), `"image":"gib-test/cli:1"`)
+	assert.Contains(t, string(meta), `"imagePushed":false`)
 }
 
-func TestVersion_IsPrintedByTheRootAlone(t *testing.T) {
+func TestVersion_IsPrintedByTheRootAndByBuild(t *testing.T) {
 	dir := t.TempDir()
-
-	code, out, _ := runGib(t, dir, "", "-V")
-	assert.Equal(t, 0, code)
-	assert.NotEmpty(t, out)
-
-	code, out, _ = runGib(t, dir, "", "build", "-V")
-	assert.Equal(t, 0, code)
-	assert.Empty(t, out, "Jib's build has no version of its own")
+	for _, args := range [][]string{{"-V"}, {"--version"}, {"build", "-V"}} {
+		code, out, _ := runGib(t, dir, "", args...)
+		assert.Equal(t, 0, code)
+		assert.Equal(t, gib.Version()+"\n", out, args)
+	}
 }

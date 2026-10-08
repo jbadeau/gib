@@ -73,7 +73,7 @@ build wrote.
 gib build --target=docker://my-app:latest
 ```
 
-The image tarball is piped into `docker load`, as Jib does.
+The image is loaded into the Docker daemon `DOCKER_HOST` names, as `docker load` would load it.
 
 ### Push an image tarball
 

@@ -97,19 +97,14 @@ func TestRegistry_PlainHTTPIsRefusedUnlessInsecureRegistriesAreAllowed(t *testin
 	assert.Equal(t, "Failed to verify the server at https://"+host+"/v2/ because only secure connections are allowed.", insecure.Error())
 }
 
-func TestRegistry_InsecureRegistriesFallBackToHTTPAsJibDoes(t *testing.T) {
+func TestRegistry_InsecureRegistriesFallBackToHTTP(t *testing.T) {
 	isolated(t)
 	host := serve(t)
-	l := &logs{}
 
-	c, err := scratch(t).OnLog(l.handle).Containerize(context.Background(),
+	c, err := scratch(t).Containerize(context.Background(),
 		ToRegistry("registry://"+host+"/acme/app", WithAllowInsecureRegistries(true)))
 
 	require.NoError(t, err)
-	assert.Equal(t, []string{
-		"Cannot verify server at https://" + host + "/v2/. Attempting again with no TLS verification.",
-		"Failed to connect to https://" + host + "/v2/ over HTTPS. Attempting again with HTTP.",
-	}, l.at(LevelWarn))
 	assert.Equal(t, host+"/acme/app", c.TargetImage)
 }
 
@@ -123,11 +118,9 @@ func TestRegistry_InsecureRegistriesSkipVerifyingACertificate(t *testing.T) {
 	var insecure *InsecureRegistryError
 	require.ErrorAs(t, err, &insecure)
 
-	l := &logs{}
-	_, err = scratch(t).OnLog(l.handle).Containerize(context.Background(),
+	_, err = scratch(t).Containerize(context.Background(),
 		ToRegistry(host+"/acme/app", WithAllowInsecureRegistries(true)))
 	require.NoError(t, err)
-	assert.Equal(t, []string{"Cannot verify server at https://" + host + "/v2/. Attempting again with no TLS verification."}, l.at(LevelWarn))
 }
 
 func TestRegistry_CredentialsAreNotSentOverHTTP(t *testing.T) {
@@ -220,57 +213,48 @@ func TestValidate_RefusesWhatJibRefusesBeforeBuilding(t *testing.T) {
 		"a tarball needs no credentials")
 }
 
-// fakeDocker is a docker that reports info for a daemon on platform and
-// keeps what `docker load` reads in loaded.
-func fakeDocker(t *testing.T, arch string) (docker, loaded string) {
+// daemon skips a test without a Docker daemon to load images into.
+func dockerDaemon(t *testing.T) {
 	t.Helper()
-	dir := t.TempDir()
-	loaded = filepath.Join(dir, "loaded.tar")
-	docker = filepath.Join(dir, "docker")
-	script := "#!/bin/sh\ncase \"$1\" in\ninfo) echo '{\"OSType\":\"linux\",\"Architecture\":\"" + arch + "\"}' ;;\nload) cat > " + loaded + "; echo Loaded ;;\nesac\n"
-	require.NoError(t, os.WriteFile(docker, []byte(script), 0o755))
-	return docker, loaded
+	if err := exec.Command("docker", "info").Run(); err != nil {
+		t.Skip("no Docker daemon")
+	}
 }
 
-func TestDocker_LoadsTheImageWithDockerLoad(t *testing.T) {
-	docker, loaded := fakeDocker(t, "x86_64")
+func TestDocker_TheDaemonLoadsTheImageUnderEveryTag(t *testing.T) {
+	dockerDaemon(t)
+	t.Cleanup(func() { _ = exec.Command("docker", "rmi", "gib-test/loaded:1", "gib-test/loaded:a").Run() })
 
-	c, err := scratch(t).Containerize(context.Background(),
-		ToDocker("acme/app:1", WithDockerExecutable(docker), WithAdditionalTag("a")))
+	c, err := scratch(t).SetEntrypoint("/app").Containerize(context.Background(),
+		ToDocker("gib-test/loaded:1", WithAdditionalTag("a")))
 
 	require.NoError(t, err)
-	_, data := entries(t, loaded)
-	var m []dockerImage
-	require.NoError(t, json.Unmarshal(data["manifest.json"], &m))
-	assert.Equal(t, []string{"acme/app:1", "acme/app:a"}, m[0].RepoTags)
-	assert.Equal(t, "acme/app:1", c.TargetImage)
+	var ids []string
+	for _, tag := range []string{"gib-test/loaded:1", "gib-test/loaded:a"} {
+		out, err := exec.Command("docker", "image", "inspect", "-f", "{{.Id}}", tag).Output()
+		require.NoError(t, err, tag)
+		ids = append(ids, strings.TrimSpace(string(out)))
+	}
+	assert.Equal(t, ids[0], ids[1], "one image under both tags")
+	assert.Equal(t, "gib-test/loaded:1", c.TargetImage)
+	assert.Equal(t, []string{"1", "a"}, c.Tags)
 	assert.False(t, c.ImagePushed)
 }
 
-func TestDocker_GetsTheImageForItsPlatform(t *testing.T) {
-	docker, loaded := fakeDocker(t, "aarch64")
-	l := &logs{}
+func TestDocker_TheDaemonGetsTheImageForItsPlatform(t *testing.T) {
+	dockerDaemon(t)
+	t.Cleanup(func() { _ = exec.Command("docker", "rmi", "gib-test/platform").Run() })
+	out, err := exec.Command("docker", "info", "-f", "{{.Architecture}}").Output()
+	require.NoError(t, err)
+	arch := map[string]string{"x86_64": "amd64", "aarch64": "arm64"}[strings.TrimSpace(string(out))]
 
-	_, err := scratch(t).AddPlatform("amd64", "linux").AddPlatform("arm64", "linux").OnLog(l.handle).
-		Containerize(context.Background(), ToDocker("acme/app", WithDockerExecutable(docker)))
+	_, err = scratch(t).AddPlatform("arm64", "linux").AddPlatform("amd64", "linux").SetEntrypoint("/app").
+		Containerize(context.Background(), ToDocker("gib-test/platform"))
 
 	require.NoError(t, err)
-	_, data := entries(t, loaded)
-	var cfg v1.ConfigFile
-	require.NoError(t, json.Unmarshal(data["config.json"], &cfg))
-	assert.Equal(t, "arm64", cfg.Architecture)
-	assert.Equal(t, []string{"Detected multi-platform configuration, only building image that matches the local Docker Engine's os and architecture (linux/arm64) or the first platform specified"}, l.at(LevelWarn))
-}
-
-func TestDocker_TheDaemonLoadsTheImage(t *testing.T) {
-	if err := runDocker("info"); err != nil {
-		t.Skip("no Docker daemon")
-	}
-	c, err := scratch(t).SetEntrypoint("/app").Containerize(context.Background(), ToDocker("gib-test/loaded:1"))
+	got, err := exec.Command("docker", "image", "inspect", "-f", "{{.Architecture}}", "gib-test/platform").Output()
 	require.NoError(t, err)
-	t.Cleanup(func() { _ = runDocker("rmi", "gib-test/loaded:1") })
-	assert.NoError(t, runDocker("image", "inspect", "gib-test/loaded:1"))
-	assert.Equal(t, "gib-test/loaded:1", c.TargetImage)
+	assert.Equal(t, arch, strings.TrimSpace(string(got)))
 }
 
 func TestLog_ABuildLogsAsJibDoes(t *testing.T) {
@@ -296,8 +280,4 @@ func TestLog_ABuildLogsAsJibDoes(t *testing.T) {
 	}, plain)
 	assert.Equal(t, "Containerizing application with the following files:", l.at(LevelInfo)[0])
 	assert.Equal(t, "\tApp:", l.at(LevelInfo)[1])
-}
-
-func runDocker(args ...string) error {
-	return exec.Command("docker", args...).Run()
 }

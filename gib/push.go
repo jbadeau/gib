@@ -52,7 +52,7 @@ func (c *Containerizer) Push(ctx context.Context, tarPath string) (*Container, e
 	if err := c.creds.check(); err != nil {
 		return nil, err
 	}
-	ref, err := name.ParseReference(c.registryRef)
+	ref, err := name.ParseReference(c.registryRef, c.nameOptions()...)
 	if err != nil {
 		return nil, fmt.Errorf("invalid target reference %q: %w", c.registryRef, err)
 	}
@@ -84,7 +84,7 @@ func (c *Containerizer) Push(ctx context.Context, tarPath string) (*Container, e
 	}
 	tags := []string{tag.TagStr()}
 	for _, extra := range c.additionalTags {
-		et, err := name.NewTag(tag.Context().String() + ":" + extra)
+		et, err := name.NewTag(tag.Context().String()+":"+extra, c.nameOptions()...)
 		if err != nil {
 			return nil, fmt.Errorf("invalid additional tag %q: %w", extra, err)
 		}

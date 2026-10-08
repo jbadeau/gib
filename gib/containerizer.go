@@ -30,7 +30,6 @@ type Containerizer struct {
 	creds          credentials
 	settings       registrySettings
 	remoteOptions  []remote.Option
-	docker         string
 	// toolName and toolVersion name what built the image in each layer's
 	// history, as Jib's Containerizer.setToolName and setToolVersion do.
 	toolName    string
@@ -50,7 +49,7 @@ type registrySettings struct {
 }
 
 func newContainerizer(kind string, opts []ContainerizerOption) *Containerizer {
-	c := &Containerizer{targetType: kind, toolName: "gib", toolVersion: Version(), docker: "docker"}
+	c := &Containerizer{targetType: kind, toolName: "gib", toolVersion: Version()}
 	for _, opt := range opts {
 		opt(c)
 	}
@@ -73,7 +72,7 @@ func ToTar(path string, opts ...ContainerizerOption) *Containerizer {
 }
 
 // ToDocker creates a Containerizer that loads the image into the Docker
-// daemon, as `docker load` does, named ref.
+// daemon DOCKER_HOST names, as ref.
 func ToDocker(ref string, opts ...ContainerizerOption) *Containerizer {
 	c := newContainerizer("docker", opts)
 	c.registryRef = ref
@@ -174,12 +173,6 @@ func WithRegistryMirrors(registry string, mirrors ...string) ContainerizerOption
 		}
 		c.settings.mirrors[registry] = append(c.settings.mirrors[registry], mirrors...)
 	}
-}
-
-// WithDockerExecutable sets the docker a Docker target loads the image
-// with, "docker" by default.
-func WithDockerExecutable(path string) ContainerizerOption {
-	return func(c *Containerizer) { c.docker = path }
 }
 
 // WithTarImageName sets the image name used inside the tar manifest.
@@ -294,9 +287,18 @@ func local(ref reference, tags []string, img v1.Image) (*Container, error) {
 	return &Container{Digest: digest, ImageID: id, Tags: tags, TargetImage: ref.String()}, nil
 }
 
+// nameOptions let go-containerregistry reach the target over plain HTTP
+// when insecure registries are allowed.
+func (c *Containerizer) nameOptions() []name.Option {
+	if c.settings.allowInsecure {
+		return []name.Option{name.Insecure}
+	}
+	return nil
+}
+
 // qualified is ref's repository under tag, by digest when tag is one.
-func qualified(ref reference, tag string) (name.Reference, error) {
-	repo, err := ref.repoName()
+func qualified(ref reference, tag string, insecure bool) (name.Reference, error) {
+	repo, err := ref.repoName(insecure)
 	if err != nil {
 		return nil, err
 	}
@@ -335,7 +337,7 @@ func (c *Containerizer) writeManifestList(ctx context.Context, ref reference, ta
 	}
 	list := mutate.AppendManifests(mutate.IndexMediaType(empty.Index, listType), adds...)
 	for _, tag := range tags {
-		r, err := qualified(ref, tag)
+		r, err := qualified(ref, tag, c.settings.allowInsecure)
 		if err != nil {
 			return nil, err
 		}
@@ -353,7 +355,7 @@ func (c *Containerizer) writeManifestList(ctx context.Context, ref reference, ta
 func (c *Containerizer) writeRegistry(ctx context.Context, ref reference, tags []string, image v1.Image) (*Container, error) {
 	opts := c.registryOptions(ctx, ref)
 	for _, tag := range tags {
-		r, err := qualified(ref, tag)
+		r, err := qualified(ref, tag, c.settings.allowInsecure)
 		if err != nil {
 			return nil, err
 		}
@@ -373,7 +375,7 @@ func (c *Containerizer) writeRegistry(ctx context.Context, ref reference, tags [
 // carries: how it is reached, and its credentials, found as Jib finds
 // them.
 func (c *Containerizer) registryOptions(ctx context.Context, ref reference) []remote.Option {
-	auth := remote.WithAuthFromKeychain(&keychain{rs: c.creds.retrievers(ref, c.settings.log)})
+	auth := remote.WithAuthFromKeychain(c.creds.keychain(ref, c.settings.log))
 	return append(c.settings.options(ctx, ref, auth), c.remoteOptions...)
 }
 
@@ -382,7 +384,7 @@ func (c *Containerizer) registryOptions(ctx context.Context, ref reference) []re
 func (s registrySettings) options(ctx context.Context, ref reference, auth remote.Option) []remote.Option {
 	opts := []remote.Option{
 		remote.WithContext(ctx),
-		remote.WithTransport(newFailover(ref.registry, ref.repository, s)),
+		remote.WithTransport(newGuard(ref, s)),
 		auth,
 	}
 	if s.serialize {

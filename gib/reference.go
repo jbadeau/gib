@@ -120,9 +120,10 @@ func (r reference) withQualifierString() string {
 }
 
 // name is the reference as go-containerregistry names it: by its
-// digest when it has one.
-func (r reference) name() (name.Reference, error) {
-	repo, err := r.repoName()
+// digest when it has one, on a registry that may be reached over plain
+// HTTP when insecure.
+func (r reference) name(insecure bool) (name.Reference, error) {
+	repo, err := r.repoName(insecure)
 	if err != nil {
 		return nil, err
 	}
@@ -133,10 +134,19 @@ func (r reference) name() (name.Reference, error) {
 }
 
 // repoName is the reference's repository as go-containerregistry names
-// it, its name as Jib validates it rather than as go-containerregistry
-// would, which refuses a repository of one character.
-func (r reference) repoName() (name.Repository, error) {
-	reg, err := name.NewRegistry(r.registry)
+// it. The name is the one parseReference validated, by the distribution
+// grammar, which go-containerregistry narrows to repositories of two
+// characters or more.
+func (r reference) repoName(insecure bool) (name.Repository, error) {
+	var opts []name.Option
+	if insecure {
+		opts = append(opts, name.Insecure)
+	}
+	host := r.registry
+	if host == dockerHub {
+		host = name.DefaultRegistry
+	}
+	reg, err := name.NewRegistry(host, opts...)
 	if err != nil {
 		return name.Repository{}, err
 	}

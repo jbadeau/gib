@@ -2,19 +2,20 @@ package gib
 
 import (
 	"bytes"
-	"context"
-	"encoding/base64"
-	"encoding/json"
 	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 
+	"github.com/docker/cli/cli/config"
+	"github.com/docker/cli/cli/config/configfile"
+	"github.com/docker/docker-credential-helpers/client"
+	helpers "github.com/docker/docker-credential-helpers/credentials"
 	"github.com/google/go-containerregistry/pkg/authn"
-	"golang.org/x/oauth2/google"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/google"
 )
 
 // Credential holds registry authentication credentials.
@@ -22,10 +23,6 @@ type Credential struct {
 	Username string
 	Password string
 }
-
-// tokenUser is the username of a credential whose password is an OAuth2
-// refresh token, Jib's Credential.OAUTH2_TOKEN_USER_NAME.
-const tokenUser = "<token>"
 
 // credentials are where a registry's credentials come from: a known
 // credential and a credential helper, each set by the user, then the
@@ -44,138 +41,6 @@ func (e *HelperNotFoundError) Error() string {
 	return "Specified credential helper was not found: " + e.Helper
 }
 
-// check fails for a credential helper named by a path that does not
-// exist, as Jib fails before it builds anything.
-func (c credentials) check() error {
-	if c.helper == "" || !strings.ContainsRune(c.helper, filepath.Separator) {
-		return nil
-	}
-	if _, err := os.Stat(c.helper); err != nil {
-		return &HelperNotFoundError{c.helper}
-	}
-	return nil
-}
-
-// retriever returns a credential, or nil when it has none for the
-// registry.
-type retriever func() (*Credential, error)
-
-// retrievers are the sources of ref's credentials, tried in order until
-// one has some, as Jib's DefaultCredentialRetrievers lists them.
-func (c credentials) retrievers(ref reference, log LogHandler) []retriever {
-	got := func(source string) {
-		log.log(LevelLifecycle, "Using %s for %s", source, ref)
-	}
-	var rs []retriever
-	if c.known != nil {
-		rs = append(rs, func() (*Credential, error) {
-			got("credentials from " + c.knownSource)
-			return c.known, nil
-		})
-	}
-	if c.helper != "" {
-		helper := c.helper
-		if !strings.ContainsRune(helper, filepath.Separator) {
-			helper = "docker-credential-" + helper
-		}
-		rs = append(rs, func() (*Credential, error) {
-			cred, err := runHelper(helper, ref.registry)
-			var unhandled *unhandledError
-			if errors.As(err, &unhandled) {
-				log.log(LevelInfo, "No credentials for %s in %s", ref.registry, helper)
-				return nil, nil
-			}
-			if err != nil {
-				return nil, err
-			}
-			got("credential helper " + filepath.Base(helper))
-			return cred, nil
-		})
-	}
-	for _, file := range dockerConfigFiles() {
-		rs = append(rs, func() (*Credential, error) {
-			cred, err := fromDockerConfig(file, ref.registry, log)
-			if err != nil {
-				log.log(LevelInfo, "Unable to parse Docker config file: %s", file)
-				return nil, nil
-			}
-			if cred != nil {
-				got("credentials from Docker config (" + file + ")")
-			}
-			return cred, nil
-		})
-	}
-	rs = append(rs, func() (*Credential, error) {
-		for _, w := range wellKnownHelpers {
-			if !strings.HasSuffix(ref.registry, w.suffix) {
-				continue
-			}
-			cred, err := runHelper(w.helper, ref.registry)
-			var missing *HelperMissingError
-			var unhandled *unhandledError
-			if errors.As(err, &missing) || errors.As(err, &unhandled) {
-				log.log(LevelInfo, "%s", err)
-				if c := errors.Unwrap(err); c != nil {
-					log.log(LevelInfo, "  Caused by: %s", c)
-				}
-				continue
-			}
-			if err != nil {
-				return nil, err
-			}
-			got("credential helper " + w.helper)
-			return cred, nil
-		}
-		return nil, nil
-	})
-	rs = append(rs, func() (*Credential, error) {
-		return googleADC(ref, log, got), nil
-	})
-	return rs
-}
-
-// retrieve is the first credential one of rs has, or nil.
-func retrieve(rs []retriever) (*Credential, error) {
-	for _, r := range rs {
-		cred, err := r()
-		if err != nil || cred != nil {
-			return cred, err
-		}
-	}
-	return nil, nil
-}
-
-// keychain resolves every registry to the credential its retrievers
-// find, looked for once.
-type keychain struct {
-	once sync.Once
-	rs   []retriever
-	auth authn.Authenticator
-	err  error
-}
-
-func (k *keychain) Resolve(authn.Resource) (authn.Authenticator, error) {
-	k.once.Do(func() {
-		cred, err := retrieve(k.rs)
-		switch {
-		case err != nil:
-			k.err = err
-		case cred == nil:
-			k.auth = authn.Anonymous
-		case cred.Username == tokenUser:
-			k.auth = authn.FromConfig(authn.AuthConfig{IdentityToken: cred.Password})
-		default:
-			k.auth = &authn.Basic{Username: cred.Username, Password: cred.Password}
-		}
-	})
-	return k.auth, k.err
-}
-
-var wellKnownHelpers = []struct{ suffix, helper string }{
-	{"gcr.io", "docker-credential-gcr"},
-	{"amazonaws.com", "docker-credential-ecr-login"},
-}
-
 // HelperMissingError is a credential helper that is not installed.
 type HelperMissingError struct {
 	Helper string
@@ -188,50 +53,174 @@ func (e *HelperMissingError) Error() string {
 
 func (e *HelperMissingError) Unwrap() error { return e.Cause }
 
-// unhandledError is a credential helper that has nothing for a server.
-type unhandledError struct{ helper, server, output string }
-
-func (e *unhandledError) Error() string {
-	return "The credential helper (" + e.helper + ") has nothing for server URL: " + e.server + "\n\nGot output:\n\n" + e.output
+// check fails for a credential helper named by a path that does not
+// exist, as Jib fails before it builds anything.
+func (c credentials) check() error {
+	if c.helper == "" || !strings.ContainsRune(c.helper, filepath.Separator) {
+		return nil
+	}
+	if _, err := os.Stat(c.helper); err != nil {
+		return &HelperNotFoundError{c.helper}
+	}
+	return nil
 }
 
-// runHelper asks a Docker credential helper for server's credentials as
-// Jib's DockerCredentialHelper does: the server on its stdin, a
-// Username and Secret on its stdout, and nothing usable there meaning it
-// has none.
-func runHelper(helper, server string) (*Credential, error) {
-	cmd := exec.Command(helper, "get")
-	cmd.Stdin = strings.NewReader(server)
-	var stdout, stderr bytes.Buffer
-	cmd.Stdout, cmd.Stderr = &stdout, &stderr
-	if err := cmd.Start(); err != nil {
-		if errors.Is(err, exec.ErrNotFound) || errors.Is(err, os.ErrNotExist) {
-			return nil, &HelperMissingError{Helper: helper, Cause: err}
+// keychain is where ref's credentials are looked for, in the order of
+// Jib's DefaultCredentialRetrievers: the known credential, the credential
+// helper, Podman's and Docker's config files, the well-known credential
+// helpers of Google's and Amazon's registries, and Google's credentials.
+// The first source with a credential gives it, looked for once.
+func (c credentials) keychain(ref reference, log LogHandler) authn.Keychain {
+	got := func(source string) func() {
+		return func() { log.log(LevelLifecycle, "Using %s for %s", source, ref) }
+	}
+	var kcs []authn.Keychain
+	if c.known != nil {
+		kcs = append(kcs, logged{static{authn.FromConfig(authn.AuthConfig{Username: c.known.Username, Password: c.known.Password})},
+			got("credentials from " + c.knownSource)})
+	}
+	if c.helper != "" {
+		h := c.helper
+		if !strings.ContainsRune(h, filepath.Separator) {
+			h = "docker-credential-" + h
 		}
-		return nil, err
+		kcs = append(kcs, logged{helper{program: h, required: true, log: log}, got("credential helper " + filepath.Base(h))})
 	}
-	_ = cmd.Wait()
-	out := stdout.String()
-	if strings.Contains(out, "credentials not found in native keychain") {
-		return nil, &unhandledError{helper, server, out}
+	for _, f := range configFiles() {
+		kcs = append(kcs, logged{configFile{file: f, log: log}, got("credentials from Docker config (" + f + ")")})
 	}
-	if out == "" {
-		return nil, &unhandledError{helper, server, stderr.String()}
+	for _, w := range []struct{ suffix, program string }{
+		{"gcr.io", "docker-credential-gcr"},
+		{"amazonaws.com", "docker-credential-ecr-login"},
+	} {
+		if strings.HasSuffix(ref.registry, w.suffix) {
+			kcs = append(kcs, logged{helper{program: w.program, log: log}, got("credential helper " + w.program)})
+		}
 	}
-	var resp struct {
-		Username string `json:"Username"`
-		Secret   string `json:"Secret"`
-	}
-	if err := json.Unmarshal(stdout.Bytes(), &resp); err != nil || resp.Username == "" || resp.Secret == "" {
-		return nil, &unhandledError{helper, server, out}
-	}
-	return &Credential{Username: resp.Username, Password: resp.Secret}, nil
+	kcs = append(kcs, logged{google.Keychain, got("Google Application Default Credentials")})
+	return &once{kc: authn.NewMultiKeychain(kcs...)}
 }
 
-// dockerConfigFiles are the files Jib reads credentials from, in order:
-// Podman's auth.json, then Docker's config.json, Kubernetes'
+// once resolves its keychain once, for every request a build makes.
+type once struct {
+	kc   authn.Keychain
+	o    sync.Once
+	auth authn.Authenticator
+	err  error
+}
+
+func (k *once) Resolve(r authn.Resource) (authn.Authenticator, error) {
+	k.o.Do(func() { k.auth, k.err = k.kc.Resolve(r) })
+	return k.auth, k.err
+}
+
+// logged logs where a credential came from when its keychain has one.
+type logged struct {
+	kc  authn.Keychain
+	got func()
+}
+
+func (l logged) Resolve(r authn.Resource) (authn.Authenticator, error) {
+	a, err := l.kc.Resolve(r)
+	if err == nil && a != authn.Anonymous {
+		l.got()
+	}
+	return a, err
+}
+
+type static struct{ auth authn.Authenticator }
+
+func (s static) Resolve(authn.Resource) (authn.Authenticator, error) { return s.auth, nil }
+
+// serverURL is the name a registry's credentials are kept under: Docker
+// Hub's is its v1 URL.
+func serverURL(r authn.Resource) string {
+	if r.RegistryStr() == name.DefaultRegistry {
+		return authn.DefaultAuthKey
+	}
+	return r.RegistryStr()
+}
+
+// helper asks a Docker credential helper for a registry's credentials.
+// One the user named fails the build when it is not installed; a
+// well-known one is passed over.
+type helper struct {
+	program  string
+	required bool
+	log      LogHandler
+}
+
+func (h helper) Resolve(r authn.Resource) (authn.Authenticator, error) {
+	if _, err := exec.LookPath(h.program); err != nil {
+		missing := &HelperMissingError{Helper: h.program, Cause: err}
+		if h.required {
+			return nil, missing
+		}
+		h.log.log(LevelInfo, "%s", missing)
+		return authn.Anonymous, nil
+	}
+	creds, err := client.Get(client.NewShellProgramFunc(h.program), serverURL(r))
+	switch {
+	case helpers.IsErrCredentialsNotFound(err):
+		h.log.log(LevelInfo, "No credentials for %s in %s", r.RegistryStr(), h.program)
+		return authn.Anonymous, nil
+	case err != nil && h.required:
+		return nil, err
+	case err != nil:
+		h.log.log(LevelInfo, "%s", err)
+		return authn.Anonymous, nil
+	case creds.Username == "<token>":
+		return authn.FromConfig(authn.AuthConfig{IdentityToken: creds.Secret}), nil
+	}
+	return authn.FromConfig(authn.AuthConfig{Username: creds.Username, Password: creds.Secret}), nil
+}
+
+// configFile is a registry's credentials in a Docker config file, read
+// as Docker reads it: its credential helper, or its credsStore, or its
+// auths. A file that cannot be read, or whose helper fails, has none.
+type configFile struct {
+	file string
+	log  LogHandler
+}
+
+func (c configFile) Resolve(r authn.Resource) (authn.Authenticator, error) {
+	data, err := os.ReadFile(c.file)
+	if errors.Is(err, os.ErrNotExist) {
+		return authn.Anonymous, nil
+	}
+	var cf *configfile.ConfigFile
+	if err == nil {
+		if filepath.Base(c.file) == ".dockercfg" {
+			// The legacy file is what a config file's auths holds.
+			data = append(append([]byte(`{"auths":`), data...), '}')
+		}
+		cf, err = config.LoadFromReader(bytes.NewReader(data))
+	}
+	if err != nil {
+		c.log.log(LevelInfo, "Unable to parse Docker config file: %s", c.file)
+		return authn.Anonymous, nil
+	}
+	cfg, err := cf.GetAuthConfig(serverURL(r))
+	if err != nil {
+		c.log.log(LevelWarn, "%s", err)
+		return authn.Anonymous, nil
+	}
+	if cfg.Username == "" && cfg.Password == "" && cfg.Auth == "" && cfg.IdentityToken == "" && cfg.RegistryToken == "" {
+		return authn.Anonymous, nil
+	}
+	return authn.FromConfig(authn.AuthConfig{
+		Username:      cfg.Username,
+		Password:      cfg.Password,
+		Auth:          cfg.Auth,
+		IdentityToken: cfg.IdentityToken,
+		RegistryToken: cfg.RegistryToken,
+	}), nil
+}
+
+// configFiles are the config files Jib reads credentials from, in its
+// order: Podman's auth.json, then Docker's config.json, Kubernetes'
 // .dockerconfigjson and the legacy .dockercfg.
-func dockerConfigFiles() []string {
+func configFiles() []string {
 	var files []string
 	seen := map[string]bool{}
 	add := func(f string) {
@@ -251,9 +240,6 @@ func dockerConfigFiles() []string {
 	if home != "" {
 		add(filepath.Join(home, ".config", auth))
 	}
-	if d, ok := os.LookupEnv("HOME"); ok {
-		add(filepath.Join(d, ".config", auth))
-	}
 	docker := func(dir string) {
 		for _, f := range []string{"config.json", ".dockerconfigjson", ".dockercfg"} {
 			add(filepath.Join(dir, f))
@@ -265,158 +251,5 @@ func dockerConfigFiles() []string {
 	if home != "" {
 		docker(filepath.Join(home, ".docker"))
 	}
-	if d, ok := os.LookupEnv("HOME"); ok {
-		docker(filepath.Join(d, ".docker"))
-	}
 	return files
-}
-
-type dockerAuth struct {
-	Auth          *string
-	Username      *string
-	Password      *string
-	IdentityToken *string
-}
-
-type dockerConfig struct {
-	Auths       map[string]dockerAuth
-	CredsStore  string
-	CredHelpers map[string]string
-}
-
-// registryAliases are registry and the names it goes by, registry first.
-func registryAliases(registry string) []string {
-	hub := []string{"registry.hub.docker.com", "index.docker.io", "registry-1.docker.io", "docker.io"}
-	for _, h := range hub {
-		if h == registry {
-			out := []string{registry}
-			for _, a := range hub {
-				if a != registry {
-					out = append(out, a)
-				}
-			}
-			return out
-		}
-	}
-	return []string{registry}
-}
-
-// matchKey is the first of keys naming registry, by Jib's matchers in
-// their order: exactly, with https://, with a path, with both.
-func matchKey(keys []string, registry string) (string, bool) {
-	matchers := []func(string) bool{
-		func(k string) bool { return k == registry },
-		func(k string) bool { return k == "https://"+registry },
-		func(k string) bool { return strings.HasPrefix(k, registry+"/") },
-		func(k string) bool { return strings.HasPrefix(k, "https://"+registry+"/") },
-	}
-	for _, m := range matchers {
-		for _, k := range keys {
-			if m(k) {
-				return k, true
-			}
-		}
-	}
-	return "", false
-}
-
-// fromDockerConfig is registry's credential in a Docker config file, as
-// Jib's DockerConfigCredentialRetriever reads it: for each of the
-// registry's aliases, its credential helper or the config's credsStore,
-// then its auths entry.
-func fromDockerConfig(file, registry string, log LogHandler) (*Credential, error) {
-	data, err := os.ReadFile(file)
-	if errors.Is(err, os.ErrNotExist) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	var cfg dockerConfig
-	if filepath.Base(file) == ".dockercfg" {
-		err = json.Unmarshal(data, &cfg.Auths)
-	} else {
-		err = json.Unmarshal(data, &cfg)
-	}
-	if err != nil {
-		return nil, err
-	}
-	var authKeys, helperKeys []string
-	for k := range cfg.Auths {
-		authKeys = append(authKeys, k)
-	}
-	for k := range cfg.CredHelpers {
-		helperKeys = append(helperKeys, k)
-	}
-	for _, alias := range registryAliases(registry) {
-		helper, server := "", alias
-		if k, ok := matchKey(helperKeys, alias); ok {
-			helper, server = "docker-credential-"+cfg.CredHelpers[k], k
-		} else if cfg.CredsStore != "" {
-			helper = "docker-credential-" + cfg.CredsStore
-		}
-		if helper != "" {
-			log.log(LevelInfo, "trying %s for %s", helper, alias)
-			cred, err := runHelper(helper, server)
-			if err == nil {
-				return cred, nil
-			}
-			log.log(LevelWarn, "%s", err)
-			if c := errors.Unwrap(err); c != nil {
-				log.log(LevelWarn, "  Caused by: %s", c)
-			}
-		}
-		k, ok := matchKey(authKeys, alias)
-		if !ok {
-			continue
-		}
-		a := cfg.Auths[k]
-		switch {
-		case a.Auth != nil:
-			decoded, err := base64.StdEncoding.DecodeString(*a.Auth)
-			if err != nil {
-				return nil, err
-			}
-			user, pass, ok := strings.Cut(string(decoded), ":")
-			if !ok {
-				return nil, fmt.Errorf("auth for %s is not username:password", k)
-			}
-			log.log(LevelInfo, "Docker config auths section defines credentials for %s", alias)
-			if a.IdentityToken != nil && user == "00000000-0000-0000-0000-000000000000" && pass == "" {
-				log.log(LevelInfo, "Using 'identityToken' in Docker config auth for %s", alias)
-				return &Credential{Username: tokenUser, Password: *a.IdentityToken}, nil
-			}
-			return &Credential{Username: user, Password: pass}, nil
-		case a.Username != nil && a.Password != nil:
-			log.log(LevelInfo, "Docker config auths section defines username and password for %s", alias)
-			return &Credential{Username: *a.Username, Password: *a.Password}, nil
-		}
-	}
-	return nil, nil
-}
-
-// googleADC is an access token from Google's Application Default
-// Credentials for a Google registry, as Jib takes one: a service
-// account scoped to read and write Cloud Storage.
-func googleADC(ref reference, log LogHandler, got func(string)) *Credential {
-	if !strings.HasSuffix(ref.registry, "gcr.io") && !strings.HasSuffix(ref.registry, "docker.pkg.dev") {
-		return nil
-	}
-	creds, err := google.FindDefaultCredentials(context.Background(), "https://www.googleapis.com/auth/devstorage.read_write")
-	if err != nil {
-		log.log(LevelInfo, "ADC not present or error fetching access token: %s", err)
-		return nil
-	}
-	log.log(LevelInfo, "Google ADC found")
-	var kind struct{ Type string }
-	if json.Unmarshal(creds.JSON, &kind) == nil && kind.Type == "service_account" {
-		log.log(LevelInfo, "ADC is a service account. Setting GCS read-write scope")
-	}
-	tok, err := creds.TokenSource.Token()
-	if err != nil {
-		log.log(LevelInfo, "ADC not present or error fetching access token: %s", err)
-		return nil
-	}
-	got("Google Application Default Credentials")
-	return &Credential{Username: "oauth2accesstoken", Password: tok.AccessToken}
 }
