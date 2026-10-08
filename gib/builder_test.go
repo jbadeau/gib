@@ -1,9 +1,13 @@
 package gib
 
 import (
+	"context"
+	"path/filepath"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestContainerBuilder_SetEntrypoint(t *testing.T) {
@@ -117,4 +121,37 @@ func TestContainerBuilder_MethodChaining(t *testing.T) {
 	assert.Equal(t, "v", b.labels["k"])
 	assert.Equal(t, []string{"/data"}, b.volumes)
 	assert.Len(t, b.exposedPorts, 1)
+}
+
+func TestContainerBuilder_Platform(t *testing.T) {
+	tests := []struct {
+		name      string
+		platforms [][2]string
+		want      string
+		err       string
+	}{
+		{name: "none is Jib's default", want: "linux/amd64"},
+		{name: "the one named", platforms: [][2]string{{"arm64", "linux"}}, want: "linux/arm64"},
+		{name: "several are refused", platforms: [][2]string{{"arm64", "linux"}, {"amd64", "linux"}}, err: "2 platforms are named"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			b := FromScratch().SetEntrypoint("/app")
+			for _, p := range tt.platforms {
+				b.AddPlatform(p[0], p[1])
+			}
+			tarPath := filepath.Join(t.TempDir(), "image.tar")
+			_, err := b.Containerize(context.Background(), ToTar(tarPath, WithTarImageName("app")))
+			if tt.err != "" {
+				require.ErrorContains(t, err, tt.err)
+				return
+			}
+			require.NoError(t, err)
+			image, err := tarball.ImageFromPath(tarPath, nil)
+			require.NoError(t, err)
+			cfg, err := image.ConfigFile()
+			require.NoError(t, err)
+			assert.Equal(t, tt.want, cfg.OS+"/"+cfg.Architecture)
+		})
+	}
 }

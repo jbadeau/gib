@@ -25,6 +25,9 @@ type Request struct {
 	WorkingDirectory string
 	CreationTimeMs   *int64 // millis since epoch
 	MediaType        types.MediaType
+	// Platform is what the image runs on. A base whose config names no
+	// platform, such as scratch, takes it; one naming another is refused.
+	Platform v1.Platform
 }
 
 // Execute runs the build pipeline: layers -> config -> format.
@@ -46,6 +49,13 @@ func Execute(_ context.Context, req Request) (v1.Image, error) {
 		return nil, fmt.Errorf("reading config: %w", err)
 	}
 	cfg = cfg.DeepCopy()
+
+	switch {
+	case cfg.OS == "" && cfg.Architecture == "":
+		cfg.OS, cfg.Architecture, cfg.Variant = req.Platform.OS, req.Platform.Architecture, req.Platform.Variant
+	case req.Platform.OS != "" && (cfg.OS != req.Platform.OS || cfg.Architecture != req.Platform.Architecture):
+		return nil, fmt.Errorf("the base image is %s/%s, not the %s/%s the image is built for", cfg.OS, cfg.Architecture, req.Platform.OS, req.Platform.Architecture)
+	}
 
 	if req.Entrypoint != nil {
 		cfg.Config.Entrypoint = req.Entrypoint

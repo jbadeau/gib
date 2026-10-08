@@ -130,6 +130,18 @@ func (b *ContainerBuilder) AddPlatform(architecture, os string) *ContainerBuilde
 	return b
 }
 
+// platform is the one platform the image is built for: the one named,
+// or linux/amd64, Jib's default, when none is.
+func (b *ContainerBuilder) platform() (v1.Platform, error) {
+	switch len(b.platforms) {
+	case 0:
+		return v1.Platform{OS: "linux", Architecture: "amd64"}, nil
+	case 1:
+		return v1.Platform{OS: b.platforms[0].OS, Architecture: b.platforms[0].Architecture}, nil
+	}
+	return v1.Platform{}, fmt.Errorf("%d platforms are named, and gib builds an image for one", len(b.platforms))
+}
+
 // GetPlatforms returns the configured target platforms.
 func (b *ContainerBuilder) GetPlatforms() []Platform {
 	return b.platforms
@@ -157,7 +169,12 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 
 	b.emitProgress(PhasePullingBase, fmt.Sprintf("Pulling base image %s...", b.source.description()))
 
-	baseImage, err := b.source.resolve(ctx)
+	platform, err := b.platform()
+	if err != nil {
+		return nil, &BuildError{Message: "choosing the platform", Cause: err}
+	}
+
+	baseImage, err := b.source.resolve(ctx, platform)
 	if err != nil {
 		return nil, &BuildError{Message: "failed to resolve base image", Cause: err}
 	}
@@ -212,6 +229,7 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 		WorkingDirectory: b.workingDirectory,
 		CreationTimeMs:   b.creationTime,
 		MediaType:        mediaType,
+		Platform:         platform,
 	}
 
 	b.emitProgress(PhaseBuildingImage, "Building image...")

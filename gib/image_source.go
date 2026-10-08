@@ -14,7 +14,7 @@ import (
 
 // ImageSource provides a base image.
 type ImageSource interface {
-	resolve(ctx context.Context) (v1.Image, error)
+	resolve(ctx context.Context, platform v1.Platform) (v1.Image, error)
 	description() string
 }
 
@@ -68,13 +68,14 @@ func RegistrySource(ref string, opts ...ImageSourceOption) ImageSource {
 
 func (s *registrySource) description() string { return s.ref }
 
-func (s *registrySource) resolve(ctx context.Context) (v1.Image, error) {
+func (s *registrySource) resolve(ctx context.Context, platform v1.Platform) (v1.Image, error) {
 	ref, err := name.ParseReference(s.ref, s.nameOptions...)
 	if err != nil {
 		return nil, err
 	}
 
-	opts := []remote.Option{remote.WithContext(ctx)}
+	// An index resolves to the image for the platform being built.
+	opts := []remote.Option{remote.WithContext(ctx), remote.WithPlatform(platform)}
 	if s.hasAuth {
 		opts = append(opts, s.authOptions...)
 	} else {
@@ -95,7 +96,7 @@ func TarSource(path string) ImageSource {
 
 func (s *tarSource) description() string { return s.path }
 
-func (s *tarSource) resolve(_ context.Context) (v1.Image, error) {
+func (s *tarSource) resolve(_ context.Context, _ v1.Platform) (v1.Image, error) {
 	return tarball.ImageFromPath(s.path, nil)
 }
 
@@ -103,6 +104,6 @@ type scratchSource struct{}
 
 func (s *scratchSource) description() string { return "scratch" }
 
-func (s *scratchSource) resolve(_ context.Context) (v1.Image, error) {
+func (s *scratchSource) resolve(_ context.Context, _ v1.Platform) (v1.Image, error) {
 	return empty.Image, nil
 }
