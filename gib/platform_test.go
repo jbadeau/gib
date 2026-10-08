@@ -171,3 +171,25 @@ func TestPlatform_SeveralOCIFormatPlatformsArePushedAsAnOCIIndex(t *testing.T) {
 	_, got := pushedList(t, scratchFor("amd64", "arm64").SetFormat(OCIFormat))
 	assert.Equal(t, types.OCIImageIndex, got["1"].MediaType)
 }
+
+// A multi-arch tarball, as apko writes one, is a base like a manifest
+// list: each platform is built on its own image. Jib reads no such
+// tarball; gib does.
+func TestPlatform_AMultiArchTarballBaseGivesEachPlatformItsImage(t *testing.T) {
+	base := apkoTar(t, index(t, "amd64", "arm64"))
+
+	for _, arch := range []string{"amd64", "arm64"} {
+		file, err := tarOf(t, FromImage(TarSource(base)).AddPlatform(arch, "linux").SetEntrypoint("/app"))
+		require.NoError(t, err)
+		img, err := tarball.ImageFromPath(file, nil)
+		require.NoError(t, err)
+		assert.Equal(t, "linux/"+arch, platformOf(t, img))
+	}
+
+	_, got := pushedList(t, FromImage(TarSource(base)).AddPlatform("amd64", "linux").AddPlatform("arm64", "linux").SetEntrypoint("/app"))
+	idx, err := got["1"].ImageIndex()
+	require.NoError(t, err)
+	m, err := idx.IndexManifest()
+	require.NoError(t, err)
+	assert.Len(t, m.Manifests, 2)
+}

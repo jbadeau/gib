@@ -3,6 +3,7 @@ package gib
 import (
 	"archive/tar"
 	"context"
+	"encoding/json"
 	"net/http/httptest"
 	"os"
 	"path/filepath"
@@ -103,7 +104,8 @@ func tarDir(t *testing.T, dir string) string {
 
 // apkoTar writes idx the way apko writes an image of several
 // architectures: index.json is the index itself, manifests and configs
-// beside it named by digest, layers by their hex.
+// beside it named by digest, layers by their hex, and a manifest.json
+// naming every image, one per architecture.
 func apkoTar(t *testing.T, idx v1.ImageIndex) string {
 	t.Helper()
 	dir := t.TempDir()
@@ -112,6 +114,7 @@ func apkoTar(t *testing.T, idx v1.ImageIndex) string {
 	require.NoError(t, os.WriteFile(filepath.Join(dir, "index.json"), raw, 0o644))
 	m, err := idx.IndexManifest()
 	require.NoError(t, err)
+	var docker []map[string]any
 	for _, d := range m.Manifests {
 		img, err := idx.Image(d.Digest)
 		require.NoError(t, err)
@@ -125,6 +128,7 @@ func apkoTar(t *testing.T, idx v1.ImageIndex) string {
 		require.NoError(t, os.WriteFile(filepath.Join(dir, cn.String()), cfg, 0o644))
 		layers, err := img.Layers()
 		require.NoError(t, err)
+		var names []string
 		for _, l := range layers {
 			h, err := l.Digest()
 			require.NoError(t, err)
@@ -135,8 +139,13 @@ func apkoTar(t *testing.T, idx v1.ImageIndex) string {
 			_, err = f.ReadFrom(rc)
 			require.NoError(t, err)
 			require.NoError(t, f.Close())
+			names = append(names, h.Hex+".tar.gz")
 		}
+		docker = append(docker, map[string]any{"Config": cn.String(), "RepoTags": []string{"acme/base:latest-" + d.Platform.Architecture}, "Layers": names})
 	}
+	raw, err = json.Marshal(docker)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "manifest.json"), raw, 0o644))
 	return tarDir(t, dir)
 }
 
