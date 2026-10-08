@@ -215,22 +215,45 @@ func unauthorized(err error) bool {
 }
 
 type tarSource struct {
-	path string
+	path      string
+	platforms []v1.Platform
+}
+
+// TarSourceOption configures a TarSource.
+type TarSourceOption func(*tarSource)
+
+// WithIndexPlatforms names the platforms to build when the tarball
+// holds an index of several images, as apko writes a multi-arch image:
+// one image each, from the index's image for that platform. A tarball
+// of one image is unaffected, as a Jib build file's platforms leave its
+// tarball base alone.
+func WithIndexPlatforms(platforms ...Platform) TarSourceOption {
+	return func(s *tarSource) {
+		for _, p := range platforms {
+			s.platforms = append(s.platforms, v1.Platform{OS: p.OS, Architecture: p.Architecture})
+		}
+	}
 }
 
 // TarSource creates an ImageSource that reads from a tar file.
-func TarSource(path string) ImageSource {
-	return &tarSource{path: path}
+func TarSource(path string, opts ...TarSourceOption) ImageSource {
+	s := &tarSource{path: path}
+	for _, o := range opts {
+		o(s)
+	}
+	return s
 }
 
 func (s *tarSource) description() string { return s.path }
 
-// resolve reads a docker-save archive as Jib does, by its
-// manifest.json. A tarball holding only an OCI image layout, as gib
-// writes an OCI-format image, is read by its index.json: an index of
-// several images is a manifest list, any other a single image.
 func (s *tarSource) check() error { return nil }
 
+// resolve reads a docker-save archive of one image as Jib does, by its
+// manifest.json. Any other tarball holding an OCI image layout, as gib
+// writes an OCI-format image and apko an image of several
+// architectures, is read by its index.json: an index of several images
+// is a manifest list, each platform built on its own image, and any
+// other a single image.
 func (s *tarSource) resolve(_ context.Context, platforms []v1.Platform, _ registrySettings) ([]base, error) {
 	img, err := tarball.ImageFromPath(s.path, nil)
 	if err == nil {
@@ -241,7 +264,7 @@ func (s *tarSource) resolve(_ context.Context, platforms []v1.Platform, _ regist
 		return nil, err
 	}
 	idx, ok := a.files["index.json"]
-	if _, docker := a.files["manifest.json"]; docker || !ok {
+	if !ok {
 		return nil, err
 	}
 	raw, err := a.read(idx)
@@ -251,6 +274,9 @@ func (s *tarSource) resolve(_ context.Context, platforms []v1.Platform, _ regist
 	m, err := v1.ParseIndexManifest(bytes.NewReader(raw))
 	if err != nil {
 		return nil, fmt.Errorf("index.json: %w", err)
+	}
+	if len(m.Manifests) > 1 && len(s.platforms) > 0 {
+		platforms = s.platforms
 	}
 	return layoutBases(a, m, platforms, s.path)
 }

@@ -126,7 +126,11 @@ func baseImageBuilder(from *BaseImageSpec, opts *ConvertOptions) (*gib.Container
 		return gib.FromImage(gib.DockerDaemonSource(ref)), nil
 	}
 	if p, ok := strings.CutPrefix(image, "tar://"); ok {
-		return gib.FromImage(gib.TarSource(p)), nil
+		var platforms []gib.Platform
+		for _, pl := range from.Platforms {
+			platforms = append(platforms, gib.Platform{Architecture: pl.Architecture, OS: pl.OS})
+		}
+		return gib.FromImage(gib.TarSource(p, gib.WithIndexPlatforms(platforms...))), nil
 	}
 	ref := strings.TrimPrefix(image, "registry://")
 	var builder *gib.ContainerBuilder
