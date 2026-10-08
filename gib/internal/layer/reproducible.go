@@ -1,14 +1,19 @@
+// Package layer builds an image layer the way Jib lays one out, as a
+// standard POSIX tar: an entry for each file and directory, every
+// directory above them owned by root, sorted by name, the same bytes
+// for the same entries every time.
 package layer
 
 import (
 	"archive/tar"
 	"bytes"
-	"compress/gzip"
+	"fmt"
 	"io"
 	"io/fs"
 	"os"
 	"path"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -22,165 +27,126 @@ type Entry struct {
 	DestinationPath  string
 	Permissions      fs.FileMode
 	ModificationTime int64  // millis since epoch
-	Ownership        string // "uid:gid"
+	Ownership        string // "<user>:<group>", each a number or a name
 }
 
-// BuildReproducibleLayer creates a v1.Layer from file entries with
-// deterministic tar output (sorted entries, normalized timestamps).
+// parentTime is when a directory the layer adds above its entries was
+// modified: Jib's default, a second past the epoch.
+var parentTime = time.Unix(1, 0).UTC()
+
+// BuildReproducibleLayer creates a v1.Layer from file entries.
 func BuildReproducibleLayer(entries []Entry) (v1.Layer, error) {
-	buf, err := buildTarGz(entries)
+	raw, err := Tar(entries)
 	if err != nil {
 		return nil, err
 	}
 	return tarball.LayerFromOpener(func() (io.ReadCloser, error) {
-		return io.NopCloser(bytes.NewReader(buf)), nil
+		return io.NopCloser(bytes.NewReader(raw)), nil
 	})
 }
 
-func buildTarGz(entries []Entry) ([]byte, error) {
-	// Sort entries by destination path
-	sorted := make([]Entry, len(entries))
-	copy(sorted, entries)
-	sort.Slice(sorted, func(i, j int) bool {
-		return sorted[i].DestinationPath < sorted[j].DestinationPath
-	})
-
-	var buf bytes.Buffer
-	gw := gzip.NewWriter(&buf)
-	tw := tar.NewWriter(gw)
-
-	// Track created parent directories
-	createdDirs := make(map[string]bool)
-
-	for _, entry := range sorted {
-		// Ensure parent directories exist
-		if err := ensureParentDirs(tw, entry.DestinationPath, entry, createdDirs); err != nil {
-			return nil, err
+// Tar is the uncompressed layer. Each name is added once, the first
+// entry for it winning; before each entry, every directory above it not
+// yet added, owned by root; and the entries are written sorted by name.
+func Tar(entries []Entry) ([]byte, error) {
+	var hs []*tar.Header
+	sources := map[string]string{}
+	added := map[string]bool{}
+	var add func(h *tar.Header)
+	add = func(h *tar.Header) {
+		if added[h.Name] {
+			return
 		}
-
-		modTime := millisToTime(entry.ModificationTime)
-		uid, gid := parseOwnership(entry.Ownership)
-
-		fi, err := os.Stat(entry.SourcePath)
+		if parent := path.Dir(strings.TrimSuffix(h.Name, "/")); parent != "." {
+			add(&tar.Header{Typeflag: tar.TypeDir, Name: parent + "/", Mode: dirBits | 0o755, ModTime: parentTime, Format: tar.FormatPAX})
+		}
+		hs = append(hs, h)
+		added[h.Name] = true
+	}
+	for _, e := range entries {
+		h, err := header(e)
 		if err != nil {
 			return nil, err
 		}
+		if _, ok := sources[h.Name]; !ok && h.Typeflag == tar.TypeReg {
+			sources[h.Name] = e.SourcePath
+		}
+		add(h)
+	}
+	sort.Slice(hs, func(i, j int) bool { return hs[i].Name < hs[j].Name })
 
-		if fi.IsDir() {
-			destPath := strings.TrimSuffix(entry.DestinationPath, "/") + "/"
-			hdr := &tar.Header{
-				Typeflag: tar.TypeDir,
-				Name:     destPath,
-				Mode:     int64(entry.Permissions),
-				ModTime:  modTime,
-				Uid:      uid,
-				Gid:      gid,
-			}
-			if err := tw.WriteHeader(hdr); err != nil {
-				return nil, err
-			}
-			createdDirs[destPath] = true
-		} else {
-			f, err := os.Open(entry.SourcePath)
-			if err != nil {
-				return nil, err
-			}
-
-			hdr := &tar.Header{
-				Typeflag: tar.TypeReg,
-				Name:     entry.DestinationPath,
-				Size:     fi.Size(),
-				Mode:     int64(entry.Permissions),
-				ModTime:  modTime,
-				Uid:      uid,
-				Gid:      gid,
-			}
-			if err := tw.WriteHeader(hdr); err != nil {
-				_ = f.Close()
-				return nil, err
-			}
-			if _, err := io.Copy(tw, f); err != nil {
-				_ = f.Close()
-				return nil, err
-			}
-			_ = f.Close()
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for _, h := range hs {
+		if err := tw.WriteHeader(h); err != nil {
+			return nil, err
+		}
+		if h.Typeflag != tar.TypeReg {
+			continue
+		}
+		f, err := os.Open(sources[h.Name])
+		if err != nil {
+			return nil, err
+		}
+		n, err := io.Copy(tw, f)
+		_ = f.Close()
+		if err != nil {
+			return nil, err
+		}
+		if n != h.Size {
+			return nil, fmt.Errorf("%s changed size while it was added to a layer", sources[h.Name])
 		}
 	}
-
 	if err := tw.Close(); err != nil {
 		return nil, err
 	}
-	if err := gw.Close(); err != nil {
-		return nil, err
-	}
-
 	return buf.Bytes(), nil
 }
 
-func ensureParentDirs(tw *tar.Writer, destPath string, entry Entry, created map[string]bool) error {
-	dir := path.Dir(destPath)
-	if dir == "/" || dir == "." {
-		return nil
-	}
+// The file type bits a tar mode carries, as Jib writes them.
+const (
+	dirBits  = 0o40000
+	fileBits = 0o100000
+)
 
-	// Collect all parent directories
-	var dirs []string
-	for d := dir; d != "/" && d != "."; d = path.Dir(d) {
-		dirPath := d + "/"
-		if created[dirPath] {
-			break
-		}
-		dirs = append(dirs, dirPath)
+// header is the tar header of an entry: named relative to the root, a
+// directory's name ending in a slash, the source followed through a
+// symbolic link, and anything neither a file nor a directory refused.
+func header(e Entry) (*tar.Header, error) {
+	fi, err := os.Stat(e.SourcePath)
+	if err != nil {
+		return nil, err
 	}
-
-	// Create them in order (top-down)
-	modTime := millisToTime(entry.ModificationTime)
-	uid, gid := parseOwnership(entry.Ownership)
-	for i := len(dirs) - 1; i >= 0; i-- {
-		d := dirs[i]
-		if created[d] {
-			continue
-		}
-		hdr := &tar.Header{
-			Typeflag: tar.TypeDir,
-			Name:     d,
-			Mode:     0755,
-			ModTime:  modTime,
-			Uid:      uid,
-			Gid:      gid,
-		}
-		if err := tw.WriteHeader(hdr); err != nil {
-			return err
-		}
-		created[d] = true
+	h := &tar.Header{
+		Name:    strings.TrimLeft(path.Clean("/"+e.DestinationPath), "/"),
+		ModTime: time.UnixMilli(e.ModificationTime).UTC(),
+		Format:  tar.FormatPAX,
 	}
-	return nil
+	switch {
+	case fi.IsDir():
+		h.Typeflag, h.Mode = tar.TypeDir, dirBits|int64(e.Permissions.Perm())
+		h.Name += "/"
+	case fi.Mode().IsRegular():
+		h.Typeflag, h.Mode, h.Size = tar.TypeReg, fileBits|int64(e.Permissions.Perm()), fi.Size()
+	default:
+		return nil, fmt.Errorf("cannot add %s to a layer: it is neither a file nor a directory", e.SourcePath)
+	}
+	owner(h, e.Ownership)
+	return h, nil
 }
 
-func millisToTime(millis int64) time.Time {
-	return time.Unix(millis/1000, (millis%1000)*int64(time.Millisecond)).UTC()
-}
-
-func parseOwnership(ownership string) (int, int) {
-	if ownership == "" {
-		return 0, 0
+// owner sets ownership as Jib reads "<user>:<group>": a number is the
+// id, and anything else the name, over id 0.
+func owner(h *tar.Header, ownership string) {
+	user, group, _ := strings.Cut(ownership, ":")
+	if n, err := strconv.Atoi(user); err == nil {
+		h.Uid = n
+	} else {
+		h.Uname = user
 	}
-	parts := strings.SplitN(ownership, ":", 2)
-	uid := 0
-	gid := 0
-	if len(parts) >= 1 {
-		for _, c := range parts[0] {
-			if c >= '0' && c <= '9' {
-				uid = uid*10 + int(c-'0')
-			}
-		}
+	if n, err := strconv.Atoi(group); err == nil {
+		h.Gid = n
+	} else {
+		h.Gname = group
 	}
-	if len(parts) >= 2 {
-		for _, c := range parts[1] {
-			if c >= '0' && c <= '9' {
-				gid = gid*10 + int(c-'0')
-			}
-		}
-	}
-	return uid, gid
 }

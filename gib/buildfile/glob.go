@@ -1,95 +1,197 @@
 package buildfile
 
 import (
-	"io/fs"
-	"path/filepath"
+	"fmt"
+	"regexp"
 	"strings"
-
-	"github.com/gobwas/glob"
 )
 
-// matchFiles walks srcDir and returns files matching the include/exclude patterns.
-// If includes is empty, all files are included. Excludes are applied after includes.
-// Patterns use jib-style globs where ** matches zero or more path segments.
-func matchFiles(srcDir string, includes, excludes []string) ([]string, error) {
-	includeGlobs, err := compilePatterns(includes)
-	if err != nil {
-		return nil, err
+// pathMatcher is the PathMatcher Jib makes of an includes or excludes
+// pattern: Java's "glob:" syntax, matched against a whole path as the
+// directory walk spells it. A pattern ending in a slash matches what is
+// beneath it, as Jib appends "**".
+type pathMatcher struct{ re *regexp.Regexp }
+
+func newPathMatcher(glob string) (pathMatcher, error) {
+	if strings.HasSuffix(glob, "/") || strings.HasSuffix(glob, `\`) {
+		glob += "**"
 	}
-	excludeGlobs, err := compilePatterns(excludes)
+	expr, err := globToRegex(glob)
 	if err != nil {
-		return nil, err
+		return pathMatcher{}, err
 	}
-
-	var matches []string
-	err = filepath.WalkDir(srcDir, func(path string, d fs.DirEntry, err error) error {
-		if err != nil {
-			return err
-		}
-		if d.IsDir() {
-			return nil
-		}
-
-		rel, err := filepath.Rel(srcDir, path)
-		if err != nil {
-			return err
-		}
-		rel = filepath.ToSlash(rel)
-
-		// Check includes
-		if len(includeGlobs) > 0 {
-			matched := false
-			for _, g := range includeGlobs {
-				if g.Match(rel) {
-					matched = true
-					break
-				}
-			}
-			if !matched {
-				return nil
-			}
-		}
-
-		// Check excludes
-		for _, g := range excludeGlobs {
-			if g.Match(rel) {
-				return nil
-			}
-		}
-
-		matches = append(matches, path)
-		return nil
-	})
-
-	return matches, err
+	re, err := regexp.Compile(expr)
+	if err != nil {
+		return pathMatcher{}, fmt.Errorf("glob %q: %w", glob, err)
+	}
+	return pathMatcher{re: re}, nil
 }
 
-// compilePatterns compiles glob patterns for matching.
-// For patterns starting with **/, also compiles a version without the prefix
-// so that files at the root level are matched (gobwas/glob ** requires 1+ segments).
-func compilePatterns(patterns []string) ([]glob.Glob, error) {
-	var globs []glob.Glob
-	for _, pattern := range patterns {
-		g, err := glob.Compile(pattern)
-		if err != nil {
-			return nil, err
-		}
-		globs = append(globs, g)
+func (m pathMatcher) matches(path string) bool { return m.re.MatchString(path) }
 
-		// Also compile without leading **/ to match root-level files
-		if strings.HasPrefix(pattern, "**/") {
-			stripped := strings.TrimPrefix(pattern, "**/")
-			g2, err := glob.Compile(stripped)
+// anyChar is any character, line terminators included, which a name
+// may hold.
+const anyChar = `(?s:.)`
+
+// globToRegex translates a glob as the JDK's sun.nio.fs.Globs does for
+// Unix: '*' within a name, "**" across names, '?' one character of a
+// name, "[...]" a class never matching '/', "{a,b}" alternatives, and
+// '\' escaping the next character.
+func globToRegex(glob string) (string, error) {
+	r := []rune(glob)
+	next := func(i int) rune {
+		if i < len(r) {
+			return r[i]
+		}
+		return 0
+	}
+	var b strings.Builder
+	b.WriteString("^")
+	inGroup := false
+	for i := 0; i < len(r); {
+		c := r[i]
+		i++
+		switch c {
+		case '\\':
+			if i == len(r) {
+				return "", fmt.Errorf("glob %q: no character to escape", glob)
+			}
+			b.WriteString(regexp.QuoteMeta(string(r[i])))
+			i++
+		case '/':
+			b.WriteRune(c)
+		case '[':
+			class, end, err := globClass(glob, r, i)
 			if err != nil {
-				return nil, err
+				return "", err
 			}
-			globs = append(globs, g2)
+			b.WriteString(class)
+			i = end
+		case '{':
+			if inGroup {
+				return "", fmt.Errorf("glob %q: cannot nest groups", glob)
+			}
+			b.WriteString("(?:(?:")
+			inGroup = true
+		case '}':
+			if inGroup {
+				b.WriteString("))")
+				inGroup = false
+			} else {
+				b.WriteRune('}')
+			}
+		case ',':
+			if inGroup {
+				b.WriteString(")|(?:")
+			} else {
+				b.WriteRune(',')
+			}
+		case '*':
+			if next(i) == '*' {
+				b.WriteString(anyChar + "*")
+				i++
+			} else {
+				b.WriteString("[^/]*")
+			}
+		case '?':
+			b.WriteString("[^/]")
+		default:
+			b.WriteString(regexp.QuoteMeta(string(c)))
 		}
 	}
-	return globs, nil
+	if inGroup {
+		return "", fmt.Errorf("glob %q: missing '}'", glob)
+	}
+	b.WriteString("$")
+	return b.String(), nil
 }
 
-// isSingleFile returns true if src refers to a single file (not a directory).
-func isSingleFile(src string) bool {
-	return !strings.HasSuffix(src, "/") && !strings.HasSuffix(src, string(filepath.Separator))
+// globClass translates the class opening at r[i-1]: Java's "[[^/]&&[...]]",
+// which never matches '/', written without the intersection RE2 lacks.
+// It returns the class and the index after its ']'.
+func globClass(glob string, r []rune, i int) (string, int, error) {
+	next := func(i int) rune {
+		if i < len(r) {
+			return r[i]
+		}
+		return 0
+	}
+	type span struct{ lo, hi rune }
+	var spans []span
+	negate := false
+	if next(i) == '^' {
+		spans = append(spans, span{'^', '^'})
+		i++
+	} else {
+		if next(i) == '!' {
+			negate = true
+			i++
+		}
+		if next(i) == '-' {
+			spans = append(spans, span{'-', '-'})
+			i++
+		}
+	}
+	closed := false
+	hasStart := false
+	var last rune
+	for i < len(r) {
+		c := r[i]
+		i++
+		if c == ']' {
+			closed = true
+			break
+		}
+		if c == '/' {
+			return "", 0, fmt.Errorf("glob %q: explicit 'name separator' in class", glob)
+		}
+		if c == '-' {
+			if !hasStart {
+				return "", 0, fmt.Errorf("glob %q: invalid range", glob)
+			}
+			hi := next(i)
+			i++
+			if hi == 0 || hi == ']' {
+				// Java writes the '-' and stops the class here.
+				spans = append(spans, span{'-', '-'})
+				closed = hi == ']'
+				break
+			}
+			if hi < last {
+				return "", 0, fmt.Errorf("glob %q: invalid range", glob)
+			}
+			spans[len(spans)-1] = span{last, hi}
+			hasStart = false
+			continue
+		}
+		spans = append(spans, span{c, c})
+		hasStart, last = true, c
+	}
+	if !closed {
+		return "", 0, fmt.Errorf("glob %q: missing ']'", glob)
+	}
+	var b strings.Builder
+	b.WriteByte('[')
+	if negate {
+		b.WriteString("^/")
+	}
+	lit := func(c rune) string { return regexp.QuoteMeta(string(c)) }
+	for _, sp := range spans {
+		parts := []span{sp}
+		if !negate {
+			// A positive class never matches '/': split a range around it.
+			parts = []span{{sp.lo, min(sp.hi, '/'-1)}, {max(sp.lo, '/'+1), sp.hi}}
+		}
+		for _, p := range parts {
+			switch {
+			case p.lo > p.hi:
+			case p.lo == p.hi:
+				b.WriteString(lit(p.lo))
+			default:
+				b.WriteString(lit(p.lo) + "-" + lit(p.hi))
+			}
+		}
+	}
+	b.WriteByte(']')
+	return b.String(), i, nil
 }

@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -144,100 +145,209 @@ func Convert(spec *BuildFileSpec, contextDir string, opts *ConvertOptions) (*gib
 	return builder, nil
 }
 
+// buildLayer makes a layer of a layer spec as Jib's Layers.toLayers
+// does: paths spelled as Java's Path spells them, a directory walked in
+// the order its file system lists it, and each entry carrying the
+// properties of the copy that adds it.
 func buildLayer(entry LayerEntrySpec, layerProps resolvedProperties, contextDir string) (gib.FileEntriesLayer, error) {
-	var entries []gib.FileEntry
-
-	for _, copyDir := range entry.Files {
+	l := gib.FileEntriesLayer{Name: entry.Name}
+	for _, copySpec := range entry.Files {
 		props := layerProps
-		if copyDir.Properties != nil {
-			props = mergeProperties(props, copyDir.Properties)
+		if copySpec.Properties != nil {
+			props = mergeProperties(props, copySpec.Properties)
 		}
-
-		srcPath := filepath.Join(contextDir, copyDir.Src)
-
-		fi, err := os.Stat(srcPath)
-		if err != nil {
-			return gib.FileEntriesLayer{}, fmt.Errorf("source %q: %w", copyDir.Src, err)
-		}
-
-		if !fi.IsDir() {
-			// Single file copy
-			e := gib.FileEntry{
-				SourcePath:       srcPath,
-				DestinationPath:  copyDir.Dest,
-				Permissions:      props.filePermissions,
+		add := func(src, dest string, perm fs.FileMode) {
+			l.Entries = append(l.Entries, gib.FileEntry{
+				SourcePath:       src,
+				DestinationPath:  dest,
+				Permissions:      perm,
 				ModificationTime: props.timestamp,
-				Ownership:        props.user + ":" + props.group,
+				Ownership:        props.ownership(),
+			})
+		}
+		rawSrc := javaPath(copySpec.Src)
+		src := rawSrc
+		if !strings.HasPrefix(rawSrc, "/") {
+			src = javaResolve(javaPath(contextDir), rawSrc)
+		}
+		dest := path.Clean("/" + copySpec.Dest)
+		notFile := fmt.Errorf("cannot create FileLayers from non-file, non-directory: %s", src)
+		fi, err := os.Stat(src)
+		switch {
+		case err != nil || !fi.IsDir() && !fi.Mode().IsRegular():
+			return l, notFile
+		case !fi.IsDir():
+			if len(copySpec.Includes)+len(copySpec.Excludes) > 0 {
+				return l, fmt.Errorf("cannot apply includes/excludes on single file copy directives")
 			}
-			entries = append(entries, e)
-		} else {
-			// Directory copy with globs
-			files, err := matchFiles(srcPath, copyDir.Includes, copyDir.Excludes)
-			if err != nil {
-				return gib.FileEntriesLayer{}, fmt.Errorf("matching files in %q: %w", copyDir.Src, err)
+			if strings.HasSuffix(copySpec.Dest, "/") {
+				dest = path.Join(dest, path.Base(src))
 			}
+			add(src, dest, props.filePermissions)
+			continue
+		}
 
-			// Also collect directories for proper dir entries
-			dirs := make(map[string]bool)
-			for _, f := range files {
-				rel, _ := filepath.Rel(srcPath, f)
-				rel = filepath.ToSlash(rel)
-				// Add all parent dirs
-				dir := filepath.ToSlash(filepath.Dir(rel))
-				for dir != "." && dir != "/" {
-					dirs[dir] = true
-					dir = filepath.ToSlash(filepath.Dir(dir))
+		includes, err := matchers(copySpec.Includes)
+		if err != nil {
+			return l, err
+		}
+		excludes, err := matchers(copySpec.Excludes)
+		if err != nil {
+			return l, err
+		}
+		paths, err := walk(src)
+		if err != nil {
+			return l, err
+		}
+		target := func(p string) string {
+			if p == src {
+				return dest
+			}
+			return path.Join(dest, strings.TrimPrefix(p, src+"/"))
+		}
+		added := map[string]bool{}
+		for _, p := range paths {
+			if anyMatch(excludes, p) || len(includes) > 0 && !anyMatch(includes, p) {
+				continue
+			}
+			fi, err := os.Stat(p)
+			if err != nil || !fi.IsDir() && !fi.Mode().IsRegular() {
+				return l, notFile
+			}
+			if fi.IsDir() {
+				added[p] = true
+				add(p, target(p), props.directoryPermissions)
+				continue
+			}
+			// A file brings every directory between it and the source
+			// not yet added, nearest first.
+			for parent := javaParent(p); !added[parent]; parent = javaParent(parent) {
+				add(parent, target(parent), props.directoryPermissions)
+				added[parent] = true
+				if parent == src {
+					break
 				}
 			}
-
-			// Add directory entries
-			for d := range dirs {
-				destDir := filepath.ToSlash(filepath.Join(copyDir.Dest, d))
-				dirSrc := filepath.Join(srcPath, filepath.FromSlash(d))
-				entries = append(entries, gib.FileEntry{
-					SourcePath:       dirSrc,
-					DestinationPath:  destDir + "/",
-					Permissions:      props.directoryPermissions,
-					ModificationTime: props.timestamp,
-					Ownership:        props.user + ":" + props.group,
-				})
-			}
-
-			// Add file entries
-			for _, f := range files {
-				rel, _ := filepath.Rel(srcPath, f)
-				dest := filepath.ToSlash(filepath.Join(copyDir.Dest, filepath.ToSlash(rel)))
-				entries = append(entries, gib.FileEntry{
-					SourcePath:       f,
-					DestinationPath:  dest,
-					Permissions:      props.filePermissions,
-					ModificationTime: props.timestamp,
-					Ownership:        props.user + ":" + props.group,
-				})
-			}
+			add(p, target(p), props.filePermissions)
 		}
 	}
+	return l, nil
+}
 
-	return gib.FileEntriesLayer{
-		Name:    entry.Name,
-		Entries: entries,
-	}, nil
+func matchers(globs []string) ([]pathMatcher, error) {
+	var out []pathMatcher
+	for _, g := range globs {
+		m, err := newPathMatcher(g)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, nil
+}
+
+func anyMatch(ms []pathMatcher, p string) bool {
+	for _, m := range ms {
+		if m.matches(p) {
+			return true
+		}
+	}
+	return false
+}
+
+// walk lists root and everything beneath it as Java's Files.walk does:
+// depth first, a directory before what it holds, and a symbolic link
+// listed but not followed. Each directory's entries come sorted by name,
+// one of the orders Files.walk may list them in and the same on every
+// file system, so the same files are always the same layer.
+func walk(root string) ([]string, error) {
+	out := []string{root}
+	fi, err := os.Lstat(root)
+	if err != nil || !fi.IsDir() {
+		return out, err
+	}
+	var visit func(dir string) error
+	visit = func(dir string) error {
+		entries, err := os.ReadDir(dir)
+		if err != nil {
+			return err
+		}
+		for _, e := range entries {
+			p := javaResolve(dir, e.Name())
+			out = append(out, p)
+			if e.IsDir() {
+				if err := visit(p); err != nil {
+					return err
+				}
+			}
+		}
+		return nil
+	}
+	return out, visit(root)
+}
+
+// javaPath is a path as Java's Paths.get spells it: repeated slashes
+// collapsed and a trailing one dropped, "." and ".." kept.
+func javaPath(p string) string {
+	for strings.Contains(p, "//") {
+		p = strings.ReplaceAll(p, "//", "/")
+	}
+	if len(p) > 1 {
+		p = strings.TrimSuffix(p, "/")
+	}
+	return p
+}
+
+// javaResolve is base.resolve(other) for relative other.
+func javaResolve(base, other string) string {
+	switch {
+	case other == "":
+		return base
+	case base == "":
+		return other
+	case base == "/":
+		return "/" + other
+	}
+	return base + "/" + other
+}
+
+// javaParent is p.getParent().
+func javaParent(p string) string {
+	i := strings.LastIndex(p, "/")
+	switch {
+	case i > 0:
+		return p[:i]
+	case i == 0:
+		return "/"
+	}
+	return ""
 }
 
 type resolvedProperties struct {
 	filePermissions      fs.FileMode
 	directoryPermissions fs.FileMode
-	user                 string
-	group                string
+	user                 *string
+	group                *string
 	timestamp            int64
+}
+
+// ownership is how Jib's FilePropertiesStack spells it: the user, then
+// ":" and the group when there is one.
+func (p resolvedProperties) ownership() string {
+	var s string
+	if p.user != nil {
+		s = *p.user
+	}
+	if p.group != nil {
+		s += ":" + *p.group
+	}
+	return s
 }
 
 func defaultProperties() resolvedProperties {
 	return resolvedProperties{
 		filePermissions:      0644,
 		directoryPermissions: 0755,
-		user:                 "0",
-		group:                "0",
 		timestamp:            1000, // epoch + 1s in millis
 	}
 }
@@ -254,10 +364,12 @@ func mergeProperties(base resolvedProperties, override *FilePropertiesSpec) reso
 		}
 	}
 	if override.User != "" {
-		base.user = override.User
+		u := override.User
+		base.user = &u
 	}
 	if override.Group != "" {
-		base.group = override.Group
+		g := override.Group
+		base.group = &g
 	}
 	if override.Timestamp != "" {
 		if ts, err := parseTimestamp(override.Timestamp); err == nil {
