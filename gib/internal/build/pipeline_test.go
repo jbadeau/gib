@@ -229,7 +229,7 @@ func TestExecute_RefusesWhatJibRefuses(t *testing.T) {
 		req Request
 		err string
 	}{
-		"an environment name with =": {Request{BaseImage: empty.Image, Environment: map[string]string{"A=B": "v"}}, "cannot contain '='"},
+		"an environment name with =":         {Request{BaseImage: empty.Image, Environment: map[string]string{"A=B": "v"}}, "cannot contain '='"},
 		"a base environment entry without =": {Request{BaseImage: malformed}, `"NOEQ" is not NAME=VALUE`},
 	}
 	for name, tt := range tests {
