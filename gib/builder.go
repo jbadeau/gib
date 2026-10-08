@@ -177,7 +177,12 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 
 	// Build reproducible layers
 	var v1Layers []v1.Layer
+	var layerNames []string
 	for _, fel := range b.layers {
+		// A layer of no entries is no layer, as in Jib.
+		if len(fel.Entries) == 0 {
+			continue
+		}
 		b.emitProgress(PhaseBuildingLayer, fmt.Sprintf("Building layer %s...", fel.Name))
 		// Convert FileEntry -> layer.Entry
 		entries := make([]layer.Entry, len(fel.Entries))
@@ -195,6 +200,7 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 			return nil, &BuildError{Message: fmt.Sprintf("building layer %q", fel.Name), Cause: err}
 		}
 		v1Layers = append(v1Layers, l)
+		layerNames = append(layerNames, fel.Name)
 	}
 
 	// Convert ports to strings
@@ -214,6 +220,8 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 
 	req := build.Request{
 		Layers:           v1Layers,
+		LayerNames:       layerNames,
+		CreatedBy:        target.toolName + ":" + target.toolVersion,
 		Entrypoint:       b.entrypoint,
 		ProgramArguments: b.programArguments,
 		Environment:      b.environment,

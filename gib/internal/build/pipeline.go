@@ -2,10 +2,15 @@ package build
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"slices"
+	"sort"
+	"strings"
 	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 )
@@ -13,8 +18,10 @@ import (
 // Request holds all configuration for a build.
 // All types are from go-containerregistry or stdlib to avoid import cycles.
 type Request struct {
-	BaseImage        v1.Image
-	Layers           []v1.Layer
+	BaseImage v1.Image
+	Layers    []v1.Layer
+	// LayerNames name Layers, one each, in the history.
+	LayerNames       []string
 	Entrypoint       []string
 	ProgramArguments []string
 	Environment      map[string]string
@@ -23,125 +30,187 @@ type Request struct {
 	Volumes          []string
 	User             string
 	WorkingDirectory string
-	CreationTimeMs   *int64 // millis since epoch
+	CreationTimeMs   *int64 // millis since epoch; nil is the epoch
 	MediaType        types.MediaType
 	// Platform is what the image is built for. A base whose config names
 	// no platform, such as scratch, takes it; any other keeps its own.
 	Platform v1.Platform
+	// CreatedBy is the tool and its version, "<tool>:<version>", each
+	// application layer's history names.
+	CreatedBy string
 }
 
-// Execute runs the build pipeline: layers -> config -> format.
+// Execute builds the image as Jib's BuildImageStep does. The config is
+// made anew, not copied: the base gives its platform, environment,
+// labels, health check, exposed ports, volumes, user, working
+// directory and history, and nothing else. Every layer, the base's
+// included, and the config carry the media types of the format built.
 func Execute(_ context.Context, req Request) (v1.Image, error) {
-	image := req.BaseImage
-
-	// 1. Append layers
-	if len(req.Layers) > 0 {
-		var err error
-		image, err = mutate.AppendLayers(image, req.Layers...)
-		if err != nil {
-			return nil, fmt.Errorf("appending layers: %w", err)
-		}
-	}
-
-	// 2. Apply config
-	cfg, err := image.ConfigFile()
+	base, err := req.BaseImage.ConfigFile()
 	if err != nil {
-		return nil, fmt.Errorf("reading config: %w", err)
+		return nil, fmt.Errorf("reading the base config: %w", err)
 	}
-	cfg = cfg.DeepCopy()
-
-	// As Jib does, a base that says what it runs on keeps it, whatever
-	// the build file names; one that does not, such as scratch, takes
-	// the platform the image is built for.
-	if cfg.OS == "" && cfg.Architecture == "" {
-		cfg.OS, cfg.Architecture, cfg.Variant = req.Platform.OS, req.Platform.Architecture, req.Platform.Variant
+	baseLayers, err := req.BaseImage.Layers()
+	if err != nil {
+		return nil, fmt.Errorf("reading the base layers: %w", err)
 	}
-
-	if req.Entrypoint != nil {
-		cfg.Config.Entrypoint = req.Entrypoint
-	}
-	if req.ProgramArguments != nil {
-		cfg.Config.Cmd = req.ProgramArguments
-	}
-	if req.User != "" {
-		cfg.Config.User = req.User
-	}
-	if req.WorkingDirectory != "" {
-		cfg.Config.WorkingDir = req.WorkingDirectory
-	}
-
-	// Merge environment (append/overwrite)
-	if len(req.Environment) > 0 {
-		envMap := make(map[string]string)
-		for _, e := range cfg.Config.Env {
-			parts := splitEnv(e)
-			envMap[parts[0]] = parts[1]
-		}
-		for k, v := range req.Environment {
-			envMap[k] = v
-		}
-		var envSlice []string
-		for k, v := range envMap {
-			envSlice = append(envSlice, k+"="+v)
-		}
-		cfg.Config.Env = envSlice
-	}
-
-	// Merge labels (overwrite on collision)
-	if len(req.Labels) > 0 {
-		if cfg.Config.Labels == nil {
-			cfg.Config.Labels = make(map[string]string)
-		}
-		for k, v := range req.Labels {
-			cfg.Config.Labels[k] = v
-		}
-	}
-
-	// Append exposed ports
-	if len(req.ExposedPorts) > 0 {
-		if cfg.Config.ExposedPorts == nil {
-			cfg.Config.ExposedPorts = make(map[string]struct{})
-		}
-		for _, p := range req.ExposedPorts {
-			cfg.Config.ExposedPorts[p] = struct{}{}
-		}
-	}
-
-	// Append volumes
-	if len(req.Volumes) > 0 {
-		if cfg.Config.Volumes == nil {
-			cfg.Config.Volumes = make(map[string]struct{})
-		}
-		for _, v := range req.Volumes {
-			cfg.Config.Volumes[v] = struct{}{}
-		}
-	}
-
-	// Set creation time
+	created := time.Unix(0, 0).UTC()
 	if req.CreationTimeMs != nil {
 		ms := *req.CreationTimeMs
-		t := time.Unix(ms/1000, (ms%1000)*int64(time.Millisecond)).UTC()
-		cfg.Created = v1.Time{Time: t}
+		created = time.Unix(ms/1000, (ms%1000)*int64(time.Millisecond)).UTC()
 	}
 
-	image, err = mutate.ConfigFile(image, cfg)
+	cfg := v1.ConfigFile{
+		Created:      v1.Time{Time: created},
+		Architecture: base.Architecture,
+		OS:           base.OS,
+	}
+	if cfg.OS == "" && cfg.Architecture == "" {
+		cfg.OS, cfg.Architecture = req.Platform.OS, req.Platform.Architecture
+	}
+
+	// History: the base's, then one for each base layer it has none for,
+	// then one for each layer built.
+	nonEmpty := 0
+	for _, h := range base.History {
+		cfg.History = append(cfg.History, h)
+		if !h.EmptyLayer {
+			nonEmpty++
+		}
+	}
+	for range len(baseLayers) - nonEmpty {
+		cfg.History = append(cfg.History, v1.History{Created: cfg.Created, Comment: "auto-generated by Jib"})
+	}
+	for i := range req.Layers {
+		h := v1.History{Created: cfg.Created, Author: "Jib", CreatedBy: req.CreatedBy}
+		if i < len(req.LayerNames) {
+			h.Comment = req.LayerNames[i]
+		}
+		cfg.History = append(cfg.History, h)
+	}
+
+	env, err := environment(base.Config.Env, req.Environment)
+	if err != nil {
+		return nil, err
+	}
+	c := v1.Config{
+		Env:          env,
+		Labels:       merged(base.Config.Labels, req.Labels),
+		ExposedPorts: union(base.Config.ExposedPorts, req.ExposedPorts),
+		Volumes:      union(base.Config.Volumes, req.Volumes),
+		User:         base.Config.User,
+		WorkingDir:   base.Config.WorkingDir,
+		Entrypoint:   base.Config.Entrypoint,
+	}
+	if req.MediaType != types.OCIManifestSchema1 {
+		c.Healthcheck = base.Config.Healthcheck
+	}
+	// The command is inherited only with the entrypoint: one that sets
+	// the entrypoint sets the command too, to nothing if it names none.
+	if req.Entrypoint != nil {
+		c.Entrypoint = req.Entrypoint
+	}
+	if req.Entrypoint == nil && req.ProgramArguments == nil {
+		c.Cmd = base.Config.Cmd
+	} else {
+		c.Cmd = req.ProgramArguments
+	}
+	if req.User != "" {
+		c.User = req.User
+	}
+	if req.WorkingDirectory != "" {
+		c.WorkingDir = req.WorkingDirectory
+	}
+	cfg.Config = c
+
+	configType, layerType := types.DockerConfigJSON, types.DockerLayer
+	manifestType := req.MediaType
+	if manifestType == "" {
+		manifestType = types.DockerManifestSchema2
+	}
+	if manifestType == types.OCIManifestSchema1 {
+		configType, layerType = types.OCIConfigJSON, types.OCILayer
+	}
+	var adds []mutate.Addendum
+	for _, l := range append(slices.Clone(baseLayers), req.Layers...) {
+		adds = append(adds, mutate.Addendum{Layer: l, MediaType: layerType})
+	}
+	image, err := mutate.Append(empty.Image, adds...)
+	if err != nil {
+		return nil, fmt.Errorf("appending layers: %w", err)
+	}
+	built, err := image.ConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	cfg.RootFS = built.RootFS
+	image, err = mutate.ConfigFile(image, &cfg)
 	if err != nil {
 		return nil, fmt.Errorf("applying config: %w", err)
 	}
-
-	// 3. Set media type / format
-	if req.MediaType != "" {
-		image = mutate.MediaType(image, req.MediaType)
-	}
-
-	return image, nil
+	image = mutate.ConfigMediaType(image, configType)
+	return mutate.MediaType(image, manifestType), nil
 }
 
-func splitEnv(env string) [2]string {
-	for i, c := range env {
-		if c == '=' {
-			return [2]string{env[:i], env[i+1:]}
+// environment is the base's environment with the build's set over it,
+// as Jib merges them: by name, the build's value winning. The base's
+// variables keep their order, and the build's new ones follow sorted, so
+// the same build gives the same image.
+func environment(base []string, set map[string]string) ([]string, error) {
+	values := map[string]string{}
+	var order []string
+	for _, e := range base {
+		name, value, ok := strings.Cut(e, "=")
+		if !ok {
+			return nil, fmt.Errorf("the base image's environment %q is not NAME=VALUE", e)
 		}
+		if _, seen := values[name]; !seen {
+			order = append(order, name)
+		}
+		values[name] = value
 	}
-	return [2]string{env, ""}
+	var added []string
+	for name, value := range set {
+		if strings.Contains(name, "=") {
+			return nil, errors.New("environment variable name cannot contain '=': " + name)
+		}
+		if _, seen := values[name]; !seen {
+			added = append(added, name)
+		}
+		values[name] = value
+	}
+	sort.Strings(added)
+	var out []string
+	for _, name := range append(order, added...) {
+		out = append(out, name+"="+values[name])
+	}
+	return out, nil
+}
+
+func merged(base, set map[string]string) map[string]string {
+	if len(base)+len(set) == 0 {
+		return nil
+	}
+	out := map[string]string{}
+	for k, v := range base {
+		out[k] = v
+	}
+	for k, v := range set {
+		out[k] = v
+	}
+	return out
+}
+
+func union(base map[string]struct{}, add []string) map[string]struct{} {
+	if len(base)+len(add) == 0 {
+		return nil
+	}
+	out := map[string]struct{}{}
+	for k := range base {
+		out[k] = struct{}{}
+	}
+	for _, k := range add {
+		out[k] = struct{}{}
+	}
+	return out
 }
