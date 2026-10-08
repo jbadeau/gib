@@ -1,0 +1,54 @@
+{
+  "manifestMediaType": "application/vnd.docker.distribution.manifest.v2+json",
+  "configMediaType": "application/vnd.docker.container.image.v1+json",
+  "layerMediaTypes": [
+    "application/vnd.docker.image.rootfs.diff.tar.gzip"
+  ],
+  "architecture": "amd64",
+  "os": "linux",
+  "created": "2020-01-01T00:00:00.123456789Z",
+  "config": {
+    "env": null,
+    "entrypoint": null,
+    "cmd": null,
+    "labels": null,
+    "exposedPorts": null,
+    "volumes": null,
+    "user": "",
+    "workingDir": "",
+    "healthcheck": null,
+    "other": null
+  },
+  "history": [
+    {
+      "author": "Jib",
+      "created": "2020-01-01T00:00:00.123456789Z",
+      "created_by": "\u003ctool\u003e",
+      "comment": "app"
+    }
+  ],
+  "layers": [
+    [
+      {
+        "name": "a.txt",
+        "type": "0",
+        "mode": "100644",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1614827160,
+        "size": 5,
+        "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+      },
+      {
+        "name": "b.txt",
+        "type": "0",
+        "mode": "100644",
+        "uid": 0,
+        "gid": 0,
+        "mtime": 1640995200,
+        "size": 5,
+        "sha256": "2cf24dba5fb0a30e26e83b2ac5b9e29e1b161e5c1fa7425e73043362938b9824"
+      }
+    ]
+  ]
+}

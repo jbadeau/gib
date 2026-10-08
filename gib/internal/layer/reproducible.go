@@ -26,7 +26,7 @@ type Entry struct {
 	SourcePath       string
 	DestinationPath  string
 	Permissions      fs.FileMode
-	ModificationTime int64  // millis since epoch
+	ModificationTime time.Time
 	Ownership        string // "<user>:<group>", each a number or a name
 }
 
@@ -119,7 +119,7 @@ func header(e Entry) (*tar.Header, error) {
 	}
 	h := &tar.Header{
 		Name:    strings.TrimLeft(path.Clean("/"+e.DestinationPath), "/"),
-		ModTime: time.UnixMilli(e.ModificationTime).UTC(),
+		ModTime: e.ModificationTime.UTC(),
 		Format:  tar.FormatPAX,
 	}
 	switch {

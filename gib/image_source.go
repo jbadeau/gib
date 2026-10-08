@@ -7,6 +7,7 @@ import (
 	"fmt"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/daemon"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
@@ -235,4 +236,40 @@ func (s *scratchSource) resolve(_ context.Context, platforms []v1.Platform) ([]b
 		out[i] = base{image: empty.Image, platform: p}
 	}
 	return out, nil
+}
+
+type dockerSource struct {
+	ref string
+}
+
+// DockerDaemonSource creates an ImageSource that reads an image from the
+// Docker daemon, as Jib reads one it has the daemon save.
+func DockerDaemonSource(ref string) ImageSource {
+	return &dockerSource{ref: ref}
+}
+
+func (s *dockerSource) description() string { return s.ref }
+
+func (s *dockerSource) resolve(ctx context.Context, platforms []v1.Platform) ([]base, error) {
+	ref, err := name.ParseReference(s.ref)
+	if err != nil {
+		return nil, err
+	}
+	img, err := daemon.Image(ref, daemon.WithContext(ctx), daemon.WithFileBufferedOpener())
+	if err != nil {
+		return nil, err
+	}
+	return single(saved{img}, platforms, s.ref)
+}
+
+// saved is an image the daemon saved, its config the one it saved
+// rather than the one the daemon describes.
+type saved struct{ v1.Image }
+
+func (s saved) ConfigFile() (*v1.ConfigFile, error) {
+	raw, err := s.RawConfigFile()
+	if err != nil {
+		return nil, err
+	}
+	return v1.ParseConfigFile(bytes.NewReader(raw))
 }

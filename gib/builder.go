@@ -3,6 +3,7 @@ package gib
 import (
 	"context"
 	"fmt"
+	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
@@ -30,7 +31,7 @@ type ContainerBuilder struct {
 	volumes          []string
 	user             string
 	workingDirectory string
-	creationTime     *int64
+	creationTime     *time.Time
 	format           ImageFormat
 	platforms        []Platform
 	progressCallback ProgressCallback
@@ -112,9 +113,9 @@ func (b *ContainerBuilder) SetWorkingDirectory(dir string) *ContainerBuilder {
 	return b
 }
 
-// SetCreationTime sets the image creation time in milliseconds since epoch.
-func (b *ContainerBuilder) SetCreationTime(millis int64) *ContainerBuilder {
-	b.creationTime = &millis
+// SetCreationTime sets the image creation time.
+func (b *ContainerBuilder) SetCreationTime(t time.Time) *ContainerBuilder {
+	b.creationTime = &t
 	return b
 }
 
@@ -230,7 +231,7 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 		Volumes:          b.volumes,
 		User:             b.user,
 		WorkingDirectory: b.workingDirectory,
-		CreationTimeMs:   b.creationTime,
+		CreationTime:     b.creationTime,
 		MediaType:        mediaType,
 	}
 

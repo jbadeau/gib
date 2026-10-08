@@ -1,0 +1,3 @@
+{
+  "error": "com.fasterxml.jackson.databind.exc.ValueInstantiationException: Cannot construct instance of `com.google.cloud.tools.jib.cli.buildfile.BuildFileSpec`, problem: Invalid port configuration: '+80'. Make sure the port is a single number or a range of two numbers separated with a '-', with or without protocol specified (e.g. '\u003cportNum\u003e/tcp' or '\u003cportNum\u003e/udp')."
+}

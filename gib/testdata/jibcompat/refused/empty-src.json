@@ -1,0 +1,3 @@
+{
+  "error": "com.fasterxml.jackson.databind.exc.ValueInstantiationException: Cannot construct instance of `com.google.cloud.tools.jib.cli.buildfile.CopySpec`, problem: Property 'src' cannot be an empty string"
+}

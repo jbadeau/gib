@@ -5,11 +5,11 @@ import (
 	"io/fs"
 	"os"
 	"path"
-	"path/filepath"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/google/go-containerregistry/pkg/name"
 	"github.com/jbadeau/gib"
 )
 
@@ -21,27 +21,121 @@ type ConvertOptions struct {
 	AllowInsecureRegistries bool
 }
 
-// Convert transforms a BuildFileSpec into a ContainerBuilder.
+// Convert transforms a BuildFileSpec into a ContainerBuilder as Jib's
+// BuildFiles.toJibContainerBuilder does.
 func Convert(spec *BuildFileSpec, contextDir string, opts *ConvertOptions) (*gib.ContainerBuilder, error) {
-	var builder *gib.ContainerBuilder
-
-	// Base image. Jib's from.image accepts scheme prefixes — registry://
-	// (the default), tar:// (an image tarball on disk), docker:// (daemon)
-	// — plus the literal "scratch". gib matches that, minus docker://,
-	// which a daemonless builder cannot support. A relative tar path is
-	// resolved against the context directory, like layer sources.
-	switch {
-	case spec.From == nil || spec.From.Image == "" || spec.From.Image == "scratch":
-		builder = gib.FromScratch()
-	case strings.HasPrefix(spec.From.Image, "tar://"):
-		tarPath := strings.TrimPrefix(spec.From.Image, "tar://")
-		if !filepath.IsAbs(tarPath) {
-			tarPath = filepath.Join(contextDir, tarPath)
+	if err := spec.check(); err != nil {
+		return nil, err
+	}
+	builder, err := baseImageBuilder(spec.From, opts)
+	if err != nil {
+		return nil, err
+	}
+	if spec.CreationTime != "" {
+		t, err := instant(spec.CreationTime, "creationTime")
+		if err != nil {
+			return nil, err
 		}
-		builder = gib.FromImage(gib.TarSource(tarPath))
-	case strings.HasPrefix(spec.From.Image, "docker://"):
-		return nil, fmt.Errorf("from.image %q: docker:// bases need a Docker daemon, which gib does not use; export the image to a tarball and use tar:// instead", spec.From.Image)
-	default:
+		builder.SetCreationTime(t)
+	}
+	if spec.Format != "" {
+		f, err := gib.ParseImageFormat(spec.Format)
+		if err != nil {
+			return nil, err
+		}
+		builder.SetFormat(f)
+	}
+	builder.SetEnvironment(spec.Environment)
+	builder.SetLabels(spec.Labels)
+	for _, v := range spec.Volumes {
+		p, err := absoluteUnixPath(v)
+		if err != nil {
+			return nil, err
+		}
+		builder.AddVolume(p)
+	}
+	for _, s := range spec.ExposedPorts {
+		ports, err := gib.ParsePorts(s)
+		if err != nil {
+			return nil, err
+		}
+		for _, p := range ports {
+			builder.AddExposedPort(p)
+		}
+	}
+	if spec.User != "" {
+		builder.SetUser(spec.User)
+	}
+	if spec.WorkingDirectory != "" {
+		p, err := absoluteUnixPath(spec.WorkingDirectory)
+		if err != nil {
+			return nil, err
+		}
+		builder.SetWorkingDirectory(p)
+	}
+	if spec.Entrypoint != nil {
+		builder.SetEntrypoint(spec.Entrypoint...)
+	}
+	if spec.Cmd != nil {
+		builder.SetProgramArguments(spec.Cmd...)
+	}
+	if spec.Layers == nil {
+		return builder, nil
+	}
+
+	base := defaultProperties()
+	if spec.Layers.Properties != nil {
+		if base, err = mergeProperties(base, spec.Layers.Properties); err != nil {
+			return nil, err
+		}
+	}
+	for _, entry := range spec.Layers.Entries {
+		if entry.Archive != "" {
+			return nil, fmt.Errorf("Only FileLayers are supported at this time.") //nolint:staticcheck // Jib's message
+		}
+		props := base
+		if entry.Properties != nil {
+			if props, err = mergeProperties(props, entry.Properties); err != nil {
+				return nil, err
+			}
+		}
+		layer, err := buildLayer(entry, props, contextDir)
+		if err != nil {
+			return nil, fmt.Errorf("building layer %q: %w", entry.Name, err)
+		}
+		builder.AddFileEntriesLayer(layer)
+	}
+	return builder, nil
+}
+
+// baseImageBuilder is a builder over the base image as Jib's
+// ContainerBuilders.create makes it: docker:// an image of the Docker
+// daemon, tar:// an image tarball, its path relative to the working
+// directory, and anything else, after an optional registry://, an image
+// reference, "scratch" being none. Only a reference is built for the
+// platforms named; Jib gives the others none.
+func baseImageBuilder(from *BaseImageSpec, opts *ConvertOptions) (*gib.ContainerBuilder, error) {
+	if from == nil {
+		return gib.FromScratch(), nil
+	}
+	image := from.Image
+	if ref, ok := strings.CutPrefix(image, "docker://"); ok {
+		if _, err := name.ParseReference(ref); err != nil {
+			return nil, fmt.Errorf("Invalid image reference: %s", ref) //nolint:staticcheck // Jib's message
+		}
+		return gib.FromImage(gib.DockerDaemonSource(ref)), nil
+	}
+	if p, ok := strings.CutPrefix(image, "tar://"); ok {
+		return gib.FromImage(gib.TarSource(p)), nil
+	}
+	ref := strings.TrimPrefix(image, "registry://")
+	var builder *gib.ContainerBuilder
+	if ref == "scratch" {
+		builder = gib.FromScratch()
+	} else {
+		if _, err := name.ParseReference(ref); err != nil {
+			return nil, fmt.Errorf("Invalid image reference: %s", ref) //nolint:staticcheck // Jib's message
+		}
 		var sourceOpts []gib.ImageSourceOption
 		if opts != nil {
 			if opts.FromUsername != "" && opts.FromPassword != "" {
@@ -53,95 +147,11 @@ func Convert(spec *BuildFileSpec, contextDir string, opts *ConvertOptions) (*gib
 				sourceOpts = append(sourceOpts, gib.WithSourceInsecure())
 			}
 		}
-		builder = gib.From(strings.TrimPrefix(spec.From.Image, "registry://"), sourceOpts...)
+		builder = gib.From(ref, sourceOpts...)
 	}
-
-	// Platforms
-	if spec.From != nil {
-		for _, p := range spec.From.Platforms {
-			builder.AddPlatform(p.Architecture, p.OS)
-		}
+	for _, p := range from.Platforms {
+		builder.AddPlatform(p.Architecture, p.OS)
 	}
-
-	// Creation time
-	if spec.CreationTime != "" {
-		millis, err := parseTimestamp(spec.CreationTime)
-		if err != nil {
-			return nil, fmt.Errorf("invalid creationTime: %w", err)
-		}
-		builder.SetCreationTime(millis)
-	}
-
-	// Format
-	if spec.Format != "" {
-		builder.SetFormat(gib.ParseImageFormat(spec.Format))
-	}
-
-	// Environment
-	if len(spec.Environment) > 0 {
-		builder.SetEnvironment(spec.Environment)
-	}
-
-	// Labels
-	if len(spec.Labels) > 0 {
-		builder.SetLabels(spec.Labels)
-	}
-
-	// Volumes
-	for _, v := range spec.Volumes {
-		builder.AddVolume(v)
-	}
-
-	// Exposed ports
-	for _, portStr := range spec.ExposedPorts {
-		p, err := gib.ParsePort(portStr)
-		if err != nil {
-			return nil, fmt.Errorf("invalid port %q: %w", portStr, err)
-		}
-		builder.AddExposedPort(p)
-	}
-
-	// User
-	if spec.User != "" {
-		builder.SetUser(spec.User)
-	}
-
-	// Working directory
-	if spec.WorkingDirectory != "" {
-		builder.SetWorkingDirectory(spec.WorkingDirectory)
-	}
-
-	// Entrypoint
-	if spec.Entrypoint != nil {
-		builder.SetEntrypoint(spec.Entrypoint...)
-	}
-
-	// Cmd
-	if spec.Cmd != nil {
-		builder.SetProgramArguments(spec.Cmd...)
-	}
-
-	// Layers
-	if spec.Layers != nil {
-		globalProps := defaultProperties()
-		if spec.Layers.Properties != nil {
-			globalProps = mergeProperties(globalProps, spec.Layers.Properties)
-		}
-
-		for _, entry := range spec.Layers.Entries {
-			layerProps := globalProps
-			if entry.Properties != nil {
-				layerProps = mergeProperties(layerProps, entry.Properties)
-			}
-
-			layer, err := buildLayer(entry, layerProps, contextDir)
-			if err != nil {
-				return nil, fmt.Errorf("building layer %q: %w", entry.Name, err)
-			}
-			builder.AddFileEntriesLayer(layer)
-		}
-	}
-
 	return builder, nil
 }
 
@@ -154,7 +164,10 @@ func buildLayer(entry LayerEntrySpec, layerProps resolvedProperties, contextDir 
 	for _, copySpec := range entry.Files {
 		props := layerProps
 		if copySpec.Properties != nil {
-			props = mergeProperties(props, copySpec.Properties)
+			var err error
+			if props, err = mergeProperties(props, copySpec.Properties); err != nil {
+				return l, err
+			}
 		}
 		add := func(src, dest string, perm fs.FileMode) {
 			l.Entries = append(l.Entries, gib.FileEntry{
@@ -170,7 +183,11 @@ func buildLayer(entry LayerEntrySpec, layerProps resolvedProperties, contextDir 
 		if !strings.HasPrefix(rawSrc, "/") {
 			src = javaResolve(javaPath(contextDir), rawSrc)
 		}
-		dest := path.Clean("/" + copySpec.Dest)
+		dest, err := absoluteUnixPath(copySpec.Dest)
+		if err != nil {
+			return l, err
+		}
+		dest = path.Clean(dest)
 		notFile := fmt.Errorf("cannot create FileLayers from non-file, non-directory: %s", src)
 		fi, err := os.Stat(src)
 		switch {
@@ -328,7 +345,7 @@ type resolvedProperties struct {
 	directoryPermissions fs.FileMode
 	user                 *string
 	group                *string
-	timestamp            int64
+	timestamp            time.Time
 }
 
 // ownership is how Jib's FilePropertiesStack spells it: the user, then
@@ -344,24 +361,32 @@ func (p resolvedProperties) ownership() string {
 	return s
 }
 
+// defaultProperties are Jib's: 644 files, 755 directories, a second
+// past the epoch.
 func defaultProperties() resolvedProperties {
 	return resolvedProperties{
 		filePermissions:      0644,
 		directoryPermissions: 0755,
-		timestamp:            1000, // epoch + 1s in millis
+		timestamp:            time.Unix(1, 0).UTC(),
 	}
 }
 
-func mergeProperties(base resolvedProperties, override *FilePropertiesSpec) resolvedProperties {
-	if override.FilePermissions != "" {
-		if perm, err := strconv.ParseUint(override.FilePermissions, 8, 32); err == nil {
-			base.filePermissions = fs.FileMode(perm)
+// mergeProperties sets over base what override sets.
+func mergeProperties(base resolvedProperties, override *FilePropertiesSpec) (resolvedProperties, error) {
+	for _, m := range []string{override.FilePermissions, override.DirectoryPermissions} {
+		if m != "" {
+			if err := permissions(&m); err != nil {
+				return base, err
+			}
 		}
 	}
+	if override.FilePermissions != "" {
+		perm, _ := strconv.ParseUint(override.FilePermissions, 8, 32)
+		base.filePermissions = fs.FileMode(perm)
+	}
 	if override.DirectoryPermissions != "" {
-		if perm, err := strconv.ParseUint(override.DirectoryPermissions, 8, 32); err == nil {
-			base.directoryPermissions = fs.FileMode(perm)
-		}
+		perm, _ := strconv.ParseUint(override.DirectoryPermissions, 8, 32)
+		base.directoryPermissions = fs.FileMode(perm)
 	}
 	if override.User != "" {
 		u := override.User
@@ -372,33 +397,11 @@ func mergeProperties(base resolvedProperties, override *FilePropertiesSpec) reso
 		base.group = &g
 	}
 	if override.Timestamp != "" {
-		if ts, err := parseTimestamp(override.Timestamp); err == nil {
-			base.timestamp = ts
+		t, err := instant(override.Timestamp, "timestamp")
+		if err != nil {
+			return base, err
 		}
+		base.timestamp = t
 	}
-	return base
-}
-
-// parseTimestamp parses a timestamp as millis or ISO 8601.
-func parseTimestamp(s string) (int64, error) {
-	// Try as millis first
-	if millis, err := strconv.ParseInt(s, 10, 64); err == nil {
-		return millis, nil
-	}
-
-	// Try as ISO 8601
-	formats := []string{
-		time.RFC3339,
-		time.RFC3339Nano,
-		"2006-01-02T15:04:05Z",
-		"2006-01-02T15:04:05",
-		"2006-01-02",
-	}
-	for _, format := range formats {
-		if t, err := time.Parse(format, s); err == nil {
-			return t.UnixMilli(), nil
-		}
-	}
-
-	return 0, fmt.Errorf("cannot parse timestamp %q: expected millis or ISO 8601", s)
+	return base, nil
 }

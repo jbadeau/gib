@@ -1,0 +1,4517 @@
+{
+  "params" : {
+    "a" : "A",
+    "b" : "B",
+    "ref" : "${a}",
+    "self" : "${self}",
+    "c1" : "${c2}",
+    "c2" : "${c1}",
+    "dol" : "$",
+    "pre" : "${",
+    "d" : "${zz:-D}",
+    "esc" : "$${a}",
+    "" : "E",
+    "a:" : "colon"
+  },
+  "cases" : [ {
+    "in" : "${a}",
+    "out" : "A"
+  }, {
+    "in" : "x${a}y${b}z",
+    "out" : "xAyBz"
+  }, {
+    "in" : "$${a}",
+    "out" : "${a}"
+  }, {
+    "in" : "$$${a}",
+    "out" : "$${a}"
+  }, {
+    "in" : "$$$${a}",
+    "out" : "$$${a}"
+  }, {
+    "in" : "${zz}",
+    "err" : "Cannot resolve variable 'zz' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${zz:-def}",
+    "out" : "def"
+  }, {
+    "in" : "${zz:-}",
+    "out" : ""
+  }, {
+    "in" : "${a:-def}",
+    "out" : "A"
+  }, {
+    "in" : "${zz:-${a}}",
+    "out" : "${a}"
+  }, {
+    "in" : "${zz:-${yy}}",
+    "out" : "${yy}"
+  }, {
+    "in" : "${ref}",
+    "out" : "A"
+  }, {
+    "in" : "${self}",
+    "err" : "Infinite loop in property interpolation of ${self}: self"
+  }, {
+    "in" : "${c1}",
+    "err" : "Infinite loop in property interpolation of ${c1}: c1->c2"
+  }, {
+    "in" : "${${b}}",
+    "err" : "Cannot resolve variable '${b' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${a${b}}",
+    "err" : "Cannot resolve variable 'a${b' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${a",
+    "out" : "${a"
+  }, {
+    "in" : "x ${a",
+    "out" : "x ${a"
+  }, {
+    "in" : "${",
+    "out" : "${"
+  }, {
+    "in" : "$",
+    "out" : "$"
+  }, {
+    "in" : "$$",
+    "out" : "$$"
+  }, {
+    "in" : "${}",
+    "out" : "E"
+  }, {
+    "in" : "${:-x}",
+    "out" : "E"
+  }, {
+    "in" : "${x}}",
+    "err" : "Cannot resolve variable 'x' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${a}}",
+    "out" : "A}"
+  }, {
+    "in" : "${esc}",
+    "out" : "${a}"
+  }, {
+    "in" : "${d}",
+    "out" : "D"
+  }, {
+    "in" : "$a",
+    "out" : "$a"
+  }, {
+    "in" : "${ a}",
+    "err" : "Cannot resolve variable ' a' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${a }",
+    "err" : "Cannot resolve variable 'a ' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${zz:=x}",
+    "err" : "Cannot resolve variable 'zz:=x' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${zz:-x:-y}",
+    "out" : "x:-y"
+  }, {
+    "in" : "${{a}}",
+    "err" : "Cannot resolve variable '{a' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "{${a}}",
+    "out" : "{A}"
+  }, {
+    "in" : "${$a}",
+    "err" : "Cannot resolve variable '$a' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${\n}",
+    "err" : "Cannot resolve variable '\n' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$${zz}",
+    "out" : "${zz}"
+  }, {
+    "in" : "$${${a}}",
+    "out" : "${A}"
+  }, {
+    "in" : "${a ${b}",
+    "err" : "Cannot resolve variable 'a ${b' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$${a ${b}",
+    "out" : "${a B"
+  }, {
+    "in" : "${a}$${b}",
+    "out" : "A${b}"
+  }, {
+    "in" : "$${a}${b}",
+    "out" : "${a}B"
+  }, {
+    "in" : "${dol}${a}",
+    "out" : "$A"
+  }, {
+    "in" : "${pre}a}",
+    "out" : "${a}"
+  }, {
+    "in" : "${dol}{a}",
+    "out" : "${a}"
+  }, {
+    "in" : "$${",
+    "out" : "$${"
+  }, {
+    "in" : "${a}$",
+    "out" : "A$"
+  }, {
+    "in" : "${zz:-${a}}${b}",
+    "out" : "${a}B"
+  }, {
+    "in" : "${zz:-$${a}}",
+    "out" : "$${a}"
+  }, {
+    "in" : "key: ${a}\nother: ${b}\n",
+    "out" : "key: A\nother: B\n"
+  }, {
+    "in" : "\n${:-escprepreescrefdol{d\n",
+    "out" : "\n${:-escprepreescrefdol{d\n"
+  }, {
+    "in" : "${:zz",
+    "out" : "${:zz"
+  }, {
+    "in" : "doladol${{}selfdol$zz",
+    "err" : "Cannot resolve variable '{' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "refesc\n$$a:-x$ref$:-${",
+    "out" : "refesc\n$$a:-x$ref$:-${"
+  }, {
+    "in" : "pre${d}}zz{doldesc",
+    "out" : "preD}zz{doldesc"
+  }, {
+    "in" : "${azz{pre:-:xref:-$$ref",
+    "out" : "${azz{pre:-:xref:-$$ref"
+  }, {
+    "in" : "{$$dolb:-{\na${d",
+    "out" : "{$$dolb:-{\na${d"
+  }, {
+    "in" : "x:-$$${",
+    "out" : "x:-$$${"
+  }, {
+    "in" : ":-{{prezz}:-}escxx}${",
+    "out" : ":-{{prezz}:-}escxx}${"
+  }, {
+    "in" : "zz${\n",
+    "out" : "zz${\n"
+  }, {
+    "in" : "selfaesc${$xesc\n$",
+    "out" : "selfaesc${$xesc\n$"
+  }, {
+    "in" : "refb${esc",
+    "out" : "refb${esc"
+  }, {
+    "in" : "d:dpre}$${",
+    "out" : "d:dpre}$${"
+  }, {
+    "in" : "$:xdprex$preaescself${",
+    "out" : "$:xdprex$preaescself${"
+  }, {
+    "in" : "a$$:-dol${{\nx{$",
+    "out" : "a$$:-dol${{\nx{$"
+  }, {
+    "in" : "${esca\n\n:-$",
+    "out" : "${esca\n\n:-$"
+  }, {
+    "in" : "bx\n:-zz}zzb{xrefref${",
+    "out" : "bx\n:-zz}zzb{xrefref${"
+  }, {
+    "in" : "{zzzz${:-:}x:d",
+    "out" : "{zzzzEx:d"
+  }, {
+    "in" : "escb${::}}esc$self",
+    "err" : "Cannot resolve variable '::' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "zz:-refself{}${refescpreself$x",
+    "out" : "zz:-refself{}${refescpreself$x"
+  }, {
+    "in" : "{escx$:-self$dol:-${escref",
+    "out" : "{escx$:-self$dol:-${escref"
+  }, {
+    "in" : "{ref$${esc:-zzadol",
+    "out" : "{ref$${esc:-zzadol"
+  }, {
+    "in" : "${{refdold:-:",
+    "out" : "${{refdold:-:"
+  }, {
+    "in" : "d${predrefzz:",
+    "out" : "d${predrefzz:"
+  }, {
+    "in" : "zzrefself${zzrefrefesca\npre{esc",
+    "out" : "zzrefself${zzrefrefesca\npre{esc"
+  }, {
+    "in" : "${escpreselfa\nescesc",
+    "out" : "${escpreselfa\nescesc"
+  }, {
+    "in" : "x:dol${\nprexescx",
+    "out" : "x:dol${\nprexescx"
+  }, {
+    "in" : "{xbref}{${dol:{$pre",
+    "out" : "{xbref}{${dol:{$pre"
+  }, {
+    "in" : ":ref${x:-daa",
+    "out" : ":ref${x:-daa"
+  }, {
+    "in" : "selfdolbesc}${refpreself$esca",
+    "out" : "selfdolbesc}${refpreself$esca"
+  }, {
+    "in" : "dolrefescesc${a{}$x",
+    "err" : "Cannot resolve variable 'a{' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "\n\nzzref{$refb$:-dol${",
+    "out" : "\n\nzzref{$refb$:-dol${"
+  }, {
+    "in" : "$dol{zzdolesca${xesc$",
+    "out" : "$dol{zzdolesca${xesc$"
+  }, {
+    "in" : "{dolesc$:{bb${$",
+    "out" : "{dolesc$:{bb${$"
+  }, {
+    "in" : ":zz$a${zz{:$b",
+    "out" : ":zz$a${zz{:$b"
+  }, {
+    "in" : "d\nprezzdpre:x$${d",
+    "out" : "d\nprezzdpre:x$${d"
+  }, {
+    "in" : "xrefaself${",
+    "out" : "xrefaself${"
+  }, {
+    "in" : "ref${descselfself}pre:-escaesc",
+    "err" : "Cannot resolve variable 'descselfself' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "zz}a$:-${dpredolselfdol",
+    "out" : "zz}a$:-${dpredolselfdol"
+  }, {
+    "in" : ":dolb}:self${dolzz",
+    "out" : ":dolb}:self${dolzz"
+  }, {
+    "in" : "x${${",
+    "out" : "x${${"
+  }, {
+    "in" : "{${esc$zz{$a:self",
+    "out" : "{${esc$zz{$a:self"
+  }, {
+    "in" : "}\n\n${$zz:-",
+    "out" : "}\n\n${$zz:-"
+  }, {
+    "in" : "dol\npreprepredolzza\n${$esc",
+    "out" : "dol\npreprepredolzza\n${$esc"
+  }, {
+    "in" : "}xa${",
+    "out" : "}xa${"
+  }, {
+    "in" : "x$refd}${ref$",
+    "out" : "x$refd}${ref$"
+  }, {
+    "in" : "bx:-refselfzz:dol$selfself${b",
+    "out" : "bx:-refselfzz:dol$selfself${b"
+  }, {
+    "in" : "pre${ref:-x$refesczz",
+    "out" : "pre${ref:-x$refesczz"
+  }, {
+    "in" : "drefx$selfself${",
+    "out" : "drefx$selfself${"
+  }, {
+    "in" : "{pre{:\n${x{a$:",
+    "out" : "{pre{:\n${x{a$:"
+  }, {
+    "in" : "preb{$esc${{ref:-dolxd",
+    "out" : "preb{$esc${{ref:-dolxd"
+  }, {
+    "in" : "${dolbdol",
+    "out" : "${dolbdol"
+  }, {
+    "in" : "azzdolzzdazz${a{$zz",
+    "out" : "azzdolzzdazz${a{$zz"
+  }, {
+    "in" : "zzd${escda",
+    "out" : "zzd${escda"
+  }, {
+    "in" : ":-\n:${b{zz}",
+    "err" : "Cannot resolve variable 'b{zz' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "{$$$dolref$}b}${",
+    "out" : "{$$$dolref$}b}${"
+  }, {
+    "in" : ":a:-xref${{{",
+    "out" : ":a:-xref${{{"
+  }, {
+    "in" : "}b${pre",
+    "out" : "}b${pre"
+  }, {
+    "in" : "dol::{selfzzzz$}a${\na",
+    "out" : "dol::{selfzzzz$}a${\na"
+  }, {
+    "in" : "a${dolselfpre\npre{self:}",
+    "err" : "Cannot resolve variable 'dolselfpre\npre{self:' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : ":-x$${pre}b$esc:",
+    "out" : ":-x${pre}b$esc:"
+  }, {
+    "in" : "${a\ndol",
+    "out" : "${a\ndol"
+  }, {
+    "in" : "ref}selfdol${",
+    "out" : "ref}selfdol${"
+  }, {
+    "in" : ":{xdolzz${selfa$ref",
+    "out" : ":{xdolzz${selfa$ref"
+  }, {
+    "in" : ":-${zzself:-$$dolzz:-x",
+    "out" : ":-${zzself:-$$dolzz:-x"
+  }, {
+    "in" : "{ref\n${escesc$zzbselfescd{",
+    "out" : "{ref\n${escesc$zzbselfescd{"
+  }, {
+    "in" : "zz$\napre$${a}:",
+    "out" : "zz$\napre${a}:"
+  }, {
+    "in" : ":dol${\nx{d",
+    "out" : ":dol${\nx{d"
+  }, {
+    "in" : "\n\n${zz",
+    "out" : "\n\n${zz"
+  }, {
+    "in" : "\nzz${xzzdd",
+    "out" : "\nzz${xzzdd"
+  }, {
+    "in" : "self${d",
+    "out" : "self${d"
+  }, {
+    "in" : "{doldol${\n$a\n$}",
+    "err" : "Cannot resolve variable '\n$a\n$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "\ndol${b",
+    "out" : "\ndol${b"
+  }, {
+    "in" : ":${d}",
+    "out" : ":D"
+  }, {
+    "in" : "zz{${xescescref:$",
+    "out" : "zz{${xescescref:$"
+  }, {
+    "in" : ":-{ref$${{$",
+    "out" : ":-{ref$${{$"
+  }, {
+    "in" : "${$esc{$$",
+    "out" : "${$esc{$$"
+  }, {
+    "in" : "${:selfesc$x{self$self",
+    "out" : "${:selfesc$x{self$self"
+  }, {
+    "in" : "b}dpre{dolpre${selfdax",
+    "out" : "b}dpre{dolpre${selfdax"
+  }, {
+    "in" : "dpredbdescaref${{$selfx",
+    "out" : "dpredbdescaref${{$selfx"
+  }, {
+    "in" : "dolx${d:{:esc",
+    "out" : "dolx${d:{:esc"
+  }, {
+    "in" : "b{${:",
+    "out" : "b{${:"
+  }, {
+    "in" : "self${dol\n",
+    "out" : "self${dol\n"
+  }, {
+    "in" : "\nref$self{$$${x:-esc",
+    "out" : "\nref$self{$$${x:-esc"
+  }, {
+    "in" : "a${$x:-:{",
+    "out" : "a${$x:-:{"
+  }, {
+    "in" : "${$}\n\n:-zzzza",
+    "err" : "Cannot resolve variable '$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${selfpre}pre",
+    "err" : "Cannot resolve variable 'selfpre' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "zzb}esc\n${xselfselfaref",
+    "out" : "zzb}esc\n${xselfselfaref"
+  }, {
+    "in" : "esczzd:-$$esc${:-",
+    "out" : "esczzd:-$$esc${:-"
+  }, {
+    "in" : "ref:zzrefself${",
+    "out" : "ref:zzrefself${"
+  }, {
+    "in" : "}b${dol",
+    "out" : "}b${dol"
+  }, {
+    "in" : "\n:-}${a:-dolref::b",
+    "out" : "\n:-}${a:-dolref::b"
+  }, {
+    "in" : "aself{\nzzd$${$",
+    "out" : "aself{\nzzd$${$"
+  }, {
+    "in" : "${refb{$pre$\n",
+    "out" : "${refb{$pre$\n"
+  }, {
+    "in" : "}zz$self$ba${prex\n:-",
+    "out" : "}zz$self$ba${prex\n:-"
+  }, {
+    "in" : "${:-zz",
+    "out" : "${:-zz"
+  }, {
+    "in" : "x${zz{",
+    "out" : "x${zz{"
+  }, {
+    "in" : "${ref$d:b{:ref",
+    "out" : "${ref$d:b{:ref"
+  }, {
+    "in" : "}:${refdolpre{",
+    "out" : "}:${refdolpre{"
+  }, {
+    "in" : "{\nzzesc:{${:$$:-apre",
+    "out" : "{\nzzesc:{${:$$:-apre"
+  }, {
+    "in" : "zz${pre{self:-xdb:$}",
+    "out" : "zzxdb:$"
+  }, {
+    "in" : "esc{${dolaesc{selfa$zz",
+    "out" : "esc{${dolaesc{selfa$zz"
+  }, {
+    "in" : "preescdolbselfx${:-dol:-",
+    "out" : "preescdolbselfx${:-dol:-"
+  }, {
+    "in" : "dselfddola${\n",
+    "out" : "dselfddola${\n"
+  }, {
+    "in" : "xrefzzprerefdolb$\n${d\n",
+    "out" : "xrefzzprerefdolb$\n${d\n"
+  }, {
+    "in" : "ref:escdola${refself:x{}d",
+    "err" : "Cannot resolve variable 'refself:x{' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "}{${x$$dpre",
+    "out" : "}{${x$$dpre"
+  }, {
+    "in" : "$dpre$${ref",
+    "out" : "$dpre$${ref"
+  }, {
+    "in" : "{self$a${{",
+    "out" : "{self$a${{"
+  }, {
+    "in" : "xprex:zz$zz${",
+    "out" : "xprex:zz$zz${"
+  }, {
+    "in" : "$:-${:-$selfbrefesc$pre{:",
+    "out" : "$:-${:-$selfbrefesc$pre{:"
+  }, {
+    "in" : "$dolrefselfd${}:x",
+    "out" : "$dolrefselfdE:x"
+  }, {
+    "in" : "${{escpre{esc",
+    "out" : "${{escpre{esc"
+  }, {
+    "in" : "dolbdol${preesc{{bx:",
+    "out" : "dolbdol${preesc{{bx:"
+  }, {
+    "in" : "${:zzselfaescda$$",
+    "out" : "${:zzselfaescda$$"
+  }, {
+    "in" : "${}pre$zzdolb}$a\ndol",
+    "out" : "Epre$zzdolb}$a\ndol"
+  }, {
+    "in" : "\nesc}self\n::-${prezzxd",
+    "out" : "\nesc}self\n::-${prezzxd"
+  }, {
+    "in" : "preesc:escbpre${}$$refbb",
+    "out" : "preesc:escbpreE$$refbb"
+  }, {
+    "in" : "$refx${",
+    "out" : "$refx${"
+  }, {
+    "in" : ":}ref\n\n${$",
+    "out" : ":}ref\n\n${$"
+  }, {
+    "in" : "b${esc{",
+    "out" : "b${esc{"
+  }, {
+    "in" : "${bpre$",
+    "out" : "${bpre$"
+  }, {
+    "in" : "${{pre:-$$:-zz",
+    "out" : "${{pre:-$$:-zz"
+  }, {
+    "in" : "${$$",
+    "out" : "${$$"
+  }, {
+    "in" : "d\npreescrefpreself${a$}{",
+    "err" : "Cannot resolve variable 'a$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$:-${}$dol",
+    "out" : "$:-E$dol"
+  }, {
+    "in" : "esc:}pre$${:xdol\n",
+    "out" : "esc:}pre$${:xdol\n"
+  }, {
+    "in" : "zz\npreesc${:-dolescapre",
+    "out" : "zz\npreesc${:-dolescapre"
+  }, {
+    "in" : "x{{preprepreselfdrefzz${",
+    "out" : "x{{preprepreselfdrefzz${"
+  }, {
+    "in" : "${\nself$}:a\n",
+    "err" : "Cannot resolve variable '\nself$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$selfxrefdd\n}${a",
+    "out" : "$selfxrefdd\n}${a"
+  }, {
+    "in" : "selfescd${dolxesc",
+    "out" : "selfescd${dolxesc"
+  }, {
+    "in" : "$dola:self${zz{:-",
+    "out" : "$dola:self${zz{:-"
+  }, {
+    "in" : "\npre\nprepre$a${",
+    "out" : "\npre\nprepre$a${"
+  }, {
+    "in" : "zzself${a:brefescbpreb",
+    "out" : "zzself${a:brefescbpreb"
+  }, {
+    "in" : "adolesca:-aself}${",
+    "out" : "adolesca:-aself}${"
+  }, {
+    "in" : "}bb$${",
+    "out" : "}bb$${"
+  }, {
+    "in" : "d$\naaesc${pre",
+    "out" : "d$\naaesc${pre"
+  }, {
+    "in" : "preesc$d${d$self:}:-d",
+    "err" : "Cannot resolve variable 'd$self:' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "a$bdol${xself$:-",
+    "out" : "a$bdol${xself$:-"
+  }, {
+    "in" : "${:-",
+    "out" : "${:-"
+  }, {
+    "in" : "$predol\ndol${escrefaescb",
+    "out" : "$predol\ndol${escrefaescb"
+  }, {
+    "in" : "dol${xzz",
+    "out" : "dol${xzz"
+  }, {
+    "in" : "d:${:-",
+    "out" : "d:${:-"
+  }, {
+    "in" : "{}:-pre:-${ref",
+    "out" : "{}:-pre:-${ref"
+  }, {
+    "in" : "$:${$pre{{selfbx{pre",
+    "out" : "$:${$pre{{selfbx{pre"
+  }, {
+    "in" : "d:bzz$xesc${esc$xpre",
+    "out" : "d:bzz$xesc${esc$xpre"
+  }, {
+    "in" : "predolzzxbaesczz${",
+    "out" : "predolzzxbaesczz${"
+  }, {
+    "in" : "ref$d$pre\ndolzz\n${",
+    "out" : "ref$d$pre\ndolzz\n${"
+  }, {
+    "in" : "bzz:$doldselfpre${$a:-\n",
+    "out" : "bzz:$doldselfpre${$a:-\n"
+  }, {
+    "in" : "xselfb${ax}b",
+    "err" : "Cannot resolve variable 'ax' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "x$self{${zz",
+    "out" : "x$self{${zz"
+  }, {
+    "in" : "${:b",
+    "out" : "${:b"
+  }, {
+    "in" : "${selfdolesczzzzbselfddolref",
+    "out" : "${selfdolesczzzzbselfddolref"
+  }, {
+    "in" : "${}$",
+    "out" : "E$"
+  }, {
+    "in" : ":-${$d",
+    "out" : ":-${$d"
+  }, {
+    "in" : "$ref:-$d${:bzz",
+    "out" : "$ref:-$d${:bzz"
+  }, {
+    "in" : "axref}prebdoldol:$${{esc",
+    "out" : "axref}prebdoldol:$${{esc"
+  }, {
+    "in" : "self${$:xd",
+    "out" : "self${$:xd"
+  }, {
+    "in" : "a${b:-zz",
+    "out" : "a${b:-zz"
+  }, {
+    "in" : "}dol${ref\n\n{\nd{escd:",
+    "out" : "}dol${ref\n\n{\nd{escd:"
+  }, {
+    "in" : "d$${b\n$$x",
+    "out" : "d$${b\n$$x"
+  }, {
+    "in" : ":-d}{zz\nx$$}ddol${",
+    "out" : ":-d}{zz\nx$$}ddol${"
+  }, {
+    "in" : "{\nselfref{b}${{$dol",
+    "out" : "{\nselfref{b}${{$dol"
+  }, {
+    "in" : "d:-\nself${",
+    "out" : "d:-\nself${"
+  }, {
+    "in" : "dol${refx:",
+    "out" : "dol${refx:"
+  }, {
+    "in" : "zz${$\nesc{xref\nabself:",
+    "out" : "zz${$\nesc{xref\nabself:"
+  }, {
+    "in" : "esc\nprezzd$esc${$dola{",
+    "out" : "esc\nprezzd$esc${$dola{"
+  }, {
+    "in" : "self}${{",
+    "out" : "self}${{"
+  }, {
+    "in" : "::-\nescbb\n${$zz",
+    "out" : "::-\nescbb\n${$zz"
+  }, {
+    "in" : "prepre${:\n",
+    "out" : "prepre${:\n"
+  }, {
+    "in" : "xa{pre$}x:-}a${pre",
+    "out" : "xa{pre$}x:-}a${pre"
+  }, {
+    "in" : ":-${ref:-refref}b$:-x$\n",
+    "out" : ":-Ab$:-x$\n"
+  }, {
+    "in" : "b${pre:selfpre:esca}",
+    "err" : "Cannot resolve variable 'pre:selfpre:esca' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${}ref",
+    "out" : "Eref"
+  }, {
+    "in" : ":-aref:-{${d",
+    "out" : ":-aref:-{${d"
+  }, {
+    "in" : "\n{${\nesc$:-{xdol",
+    "out" : "\n{${\nesc$:-{xdol"
+  }, {
+    "in" : "prezza$:xx${a:x",
+    "out" : "prezza$:xx${a:x"
+  }, {
+    "in" : "$}{$${dol$d$$d",
+    "out" : "$}{$${dol$d$$d"
+  }, {
+    "in" : "xdol:${",
+    "out" : "xdol:${"
+  }, {
+    "in" : "$\nselfdzz}escb${$",
+    "out" : "$\nselfdzz}escb${$"
+  }, {
+    "in" : "pre${aadolbselfbescbescx",
+    "out" : "pre${aadolbselfbescbescx"
+  }, {
+    "in" : "zzb$:$dself$pre${$aesc",
+    "out" : "zzb$:$dself$pre${$aesc"
+  }, {
+    "in" : "}$bb:-zz${$$}",
+    "err" : "Cannot resolve variable '$$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "}{\nazzxzz${dpre{xself",
+    "out" : "}{\nazzxzz${dpre{xself"
+  }, {
+    "in" : "selfd\nxxx${escax::-}",
+    "out" : "selfd\nxxx"
+  }, {
+    "in" : "self:-selfbx${selfa$:$self$",
+    "out" : "self:-selfbx${selfa$:$self$"
+  }, {
+    "in" : "esc}dd:${",
+    "out" : "esc}dd:${"
+  }, {
+    "in" : "${selfzz\nx:\nesc",
+    "out" : "${selfzz\nx:\nesc"
+  }, {
+    "in" : "${$drefrefself{:-:-$pre:-",
+    "out" : "${$drefrefself{:-:-$pre:-"
+  }, {
+    "in" : "dol${",
+    "out" : "dol${"
+  }, {
+    "in" : "aref\n${\nd$pre",
+    "out" : "aref\n${\nd$pre"
+  }, {
+    "in" : "xself}self${zz}\n{dolzzrefpre",
+    "err" : "Cannot resolve variable 'zz' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$${\n",
+    "out" : "$${\n"
+  }, {
+    "in" : "refpre${xb:-$:-dol\n:dol",
+    "out" : "refpre${xb:-$:-dol\n:dol"
+  }, {
+    "in" : "esc${bbdoldzz",
+    "out" : "esc${bbdoldzz"
+  }, {
+    "in" : "a:{da\n}d\n${xref",
+    "out" : "a:{da\n}d\n${xref"
+  }, {
+    "in" : "self\n${\npre}ddxa:x",
+    "err" : "Cannot resolve variable '\npre' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "dolpre}bzz{zz${",
+    "out" : "dolpre}bzz{zz${"
+  }, {
+    "in" : "a${}pre$d",
+    "out" : "aEpre$d"
+  }, {
+    "in" : "$:-$refzz:prezzd${dol\n",
+    "out" : "$:-$refzz:prezzd${dol\n"
+  }, {
+    "in" : "dol:-preescxd${dpre{zz",
+    "out" : "dol:-preescxd${dpre{zz"
+  }, {
+    "in" : "${:{:-",
+    "out" : "${:{:-"
+  }, {
+    "in" : "d:-:selfesc${$dolzz:-:-}",
+    "out" : "d:-:selfesc:-"
+  }, {
+    "in" : "\n${dolref:}xda}",
+    "err" : "Cannot resolve variable 'dolref:' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "dol$${esca",
+    "out" : "dol$${esca"
+  }, {
+    "in" : "$${esca:-selfdol$b{",
+    "out" : "$${esca:-selfdol$b{"
+  }, {
+    "in" : "dx:ddbbself:-ref${$",
+    "out" : "dx:ddbbself:-ref${$"
+  }, {
+    "in" : "preselfaa${",
+    "out" : "preselfaa${"
+  }, {
+    "in" : "refb${$$b",
+    "out" : "refb${$$b"
+  }, {
+    "in" : "${ab$",
+    "out" : "${ab$"
+  }, {
+    "in" : "predrefdol:esc:-:${",
+    "out" : "predrefdol:esc:-:${"
+  }, {
+    "in" : "self:{dolzz$dx:x${refself",
+    "out" : "self:{dolzz$dx:x${refself"
+  }, {
+    "in" : "\nba{:zzzz\n$esc${pre",
+    "out" : "\nba{:zzzz\n$esc${pre"
+  }, {
+    "in" : "}$zza{b}{self${:",
+    "out" : "}$zza{b}{self${:"
+  }, {
+    "in" : ":a::selfdola${db",
+    "out" : ":a::selfdola${db"
+  }, {
+    "in" : "${dolzzselfescrefdol}}zzdol\n",
+    "err" : "Cannot resolve variable 'dolzzselfescrefdol' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "ref${{prea::-esczzdolbzzdol",
+    "out" : "ref${{prea::-esczzdolbzzdol"
+  }, {
+    "in" : "selfpre${b}b:-zz:",
+    "out" : "selfpreBb:-zz:"
+  }, {
+    "in" : "$${zzself{:selfa",
+    "out" : "$${zzself{:selfa"
+  }, {
+    "in" : ":-${ref$::{",
+    "out" : ":-${ref$::{"
+  }, {
+    "in" : "b{$$ref${dolzzd",
+    "out" : "b{$$ref${dolzzd"
+  }, {
+    "in" : "${:",
+    "out" : "${:"
+  }, {
+    "in" : "xpred:-dself${bd}d",
+    "err" : "Cannot resolve variable 'bd' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${}}$}selfzzpre{\ndolzzzz",
+    "out" : "E}$}selfzzpre{\ndolzzzz"
+  }, {
+    "in" : "escaself${{zzb",
+    "out" : "escaself${{zzb"
+  }, {
+    "in" : "${{}$selfa\nad",
+    "err" : "Cannot resolve variable '{' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "zzdolselfdzzref$a\n${xdol",
+    "out" : "zzdolselfdzzref$a\n${xdol"
+  }, {
+    "in" : "dddol}desc}zz$}${",
+    "out" : "dddol}desc}zz$}${"
+  }, {
+    "in" : "${escxrefref:xdzzescdzz$",
+    "out" : "${escxrefref:xdzzescdzz$"
+  }, {
+    "in" : ":-zz:dd${$preesc:-ba",
+    "out" : ":-zz:dd${$preesc:-ba"
+  }, {
+    "in" : "$:-bself$${d:esc",
+    "out" : "$:-bself$${d:esc"
+  }, {
+    "in" : ":-aref{aselfrefaref\ndol${",
+    "out" : ":-aref{aselfrefaref\ndol${"
+  }, {
+    "in" : "$pre}prezz${",
+    "out" : "$pre}prezz${"
+  }, {
+    "in" : "d}\n${\nbbdol\n",
+    "out" : "d}\n${\nbbdol\n"
+  }, {
+    "in" : "${ref}preself:{",
+    "out" : "Apreself:{"
+  }, {
+    "in" : "${bb}a\n:$zz",
+    "err" : "Cannot resolve variable 'bb' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$b:-$${zz:-",
+    "out" : "$b:-$${zz:-"
+  }, {
+    "in" : "{$${:refref}a{",
+    "out" : "{${:refref}a{"
+  }, {
+    "in" : "${}$xazz",
+    "out" : "E$xazz"
+  }, {
+    "in" : "self{${zz",
+    "out" : "self{${zz"
+  }, {
+    "in" : "adpre{\na${$zz",
+    "out" : "adpre{\na${$zz"
+  }, {
+    "in" : "selfprepreb\n${\ndd",
+    "out" : "selfprepreb\n${\ndd"
+  }, {
+    "in" : "b\naxxref${zz$",
+    "out" : "b\naxxref${zz$"
+  }, {
+    "in" : "{$selfzzesc${$xself\nazz\n",
+    "out" : "{$selfzzesc${$xself\nazz\n"
+  }, {
+    "in" : "$self:}${",
+    "out" : "$self:}${"
+  }, {
+    "in" : "{{xa${",
+    "out" : "{{xa${"
+  }, {
+    "in" : "${:-ba$:-dol}b$",
+    "out" : "Eb$"
+  }, {
+    "in" : "}bx:{$aref${xpreref:-",
+    "out" : "}bx:{$aref${xpreref:-"
+  }, {
+    "in" : "{xxapre${dol",
+    "out" : "{xxapre${dol"
+  }, {
+    "in" : "{zz${refb:-",
+    "out" : "{zz${refb:-"
+  }, {
+    "in" : "dd${aazzzzselfpreescx",
+    "out" : "dd${aazzzzselfpreescx"
+  }, {
+    "in" : ":-:ddselfzzxdb${}",
+    "out" : ":-:ddselfzzxdbE"
+  }, {
+    "in" : "refescdx\nprexdol${b}\n",
+    "out" : "refescdx\nprexdolB\n"
+  }, {
+    "in" : ":\n:$:\nzzdol\n${ref$",
+    "out" : ":\n:$:\nzzdol\n${ref$"
+  }, {
+    "in" : "x$${:-}",
+    "out" : "x${:-}"
+  }, {
+    "in" : "prebx:-zzddol${dolrefref",
+    "out" : "prebx:-zzddol${dolrefref"
+  }, {
+    "in" : "}bself{}\n${${",
+    "out" : "}bself{}\n${${"
+  }, {
+    "in" : "b{xprex\n}${:-esc",
+    "out" : "b{xprex\n}${:-esc"
+  }, {
+    "in" : "zzb:::azzzzx${}self",
+    "out" : "zzb:::azzzzxEself"
+  }, {
+    "in" : "${pre{dolx$prex",
+    "out" : "${pre{dolx$prex"
+  }, {
+    "in" : ":-dolpre${:-$selfx",
+    "out" : ":-dolpre${:-$selfx"
+  }, {
+    "in" : "${}$esc}zzx$:-xzzesc",
+    "out" : "E$esc}zzx$:-xzzesc"
+  }, {
+    "in" : "x}ref:zzself{xx${",
+    "out" : "x}ref:zzself{xx${"
+  }, {
+    "in" : "${::-",
+    "out" : "${::-"
+  }, {
+    "in" : "x${db:selfpre",
+    "out" : "x${db:selfpre"
+  }, {
+    "in" : "{d:pre\na${$escazz",
+    "out" : "{d:pre\na${$escazz"
+  }, {
+    "in" : "refdol:-${d$dbx:-b",
+    "out" : "refdol:-${d$dbx:-b"
+  }, {
+    "in" : "$dpreself${dolref:b$$",
+    "out" : "$dpreself${dolref:b$$"
+  }, {
+    "in" : "$refb${\nselfselfdolself$",
+    "out" : "$refb${\nselfselfdolself$"
+  }, {
+    "in" : "\npre${ddd\naref:\n",
+    "out" : "\npre${ddd\naref:\n"
+  }, {
+    "in" : "self$self:-self:-a}d:b:${",
+    "out" : "self$self:-self:-a}d:b:${"
+  }, {
+    "in" : "self{dolpre}:${\nprexxpreesc",
+    "out" : "self{dolpre}:${\nprexxpreesc"
+  }, {
+    "in" : "${brefesc",
+    "out" : "${brefesc"
+  }, {
+    "in" : "dselfa:-doldolref:-ax${ref\n",
+    "out" : "dselfa:-doldolref:-ax${ref\n"
+  }, {
+    "in" : "{b:-}:-d${\n$dol:",
+    "out" : "{b:-}:-d${\n$dol:"
+  }, {
+    "in" : "xzzpre\nba\n${dselfesc",
+    "out" : "xzzpre\nba\n${dselfesc"
+  }, {
+    "in" : "${:-self::-ref$",
+    "out" : "${:-self::-ref$"
+  }, {
+    "in" : "}zzref${:-${{",
+    "out" : "}zzref${:-${{"
+  }, {
+    "in" : "{:\nself:-preref\nzz\n${",
+    "out" : "{:\nself:-preref\nzz\n${"
+  }, {
+    "in" : "${:dolzz\nx$}preself\nd",
+    "err" : "Cannot resolve variable ':dolzz\nx$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "selfa${dolda}:",
+    "err" : "Cannot resolve variable 'dolda' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$ref$}${\n$dolesc:aax",
+    "out" : "$ref$}${\n$dolesc:aax"
+  }, {
+    "in" : "pre\nzza:d${xref:-",
+    "out" : "pre\nzza:d${xref:-"
+  }, {
+    "in" : "${pre",
+    "out" : "${pre"
+  }, {
+    "in" : "d$ref${esc:a}zzadol$",
+    "err" : "Cannot resolve variable 'esc:a' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "esc$x:-self\n:-\n${d}a",
+    "out" : "esc$x:-self\n:-\nDa"
+  }, {
+    "in" : "self\n{zzprea:${aself{",
+    "out" : "self\n{zzprea:${aself{"
+  }, {
+    "in" : "esc{:${ddolself$x:-\ndx",
+    "out" : "esc{:${ddolself$x:-\ndx"
+  }, {
+    "in" : "pre${pre$bbd",
+    "out" : "pre${pre$bbd"
+  }, {
+    "in" : "\n{self${aselfref",
+    "out" : "\n{self${aselfref"
+  }, {
+    "in" : "$dol$}$pre${d\nbesc",
+    "out" : "$dol$}$pre${d\nbesc"
+  }, {
+    "in" : "dol{$$doldol$${b",
+    "out" : "dol{$$doldol$${b"
+  }, {
+    "in" : "a\na{dpre:x:${\n}",
+    "err" : "Cannot resolve variable '\n' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${zzzzadolaselfzzref",
+    "out" : "${zzzzadolaselfzzref"
+  }, {
+    "in" : "pre${d$zzad",
+    "out" : "pre${d$zzad"
+  }, {
+    "in" : "ref${$",
+    "out" : "ref${$"
+  }, {
+    "in" : "doldolselfd{{${selfd$",
+    "out" : "doldolselfd{{${selfd$"
+  }, {
+    "in" : "zz:a}\n${doldzz$d",
+    "out" : "zz:a}\n${doldzz$d"
+  }, {
+    "in" : "}${}",
+    "out" : "}E"
+  }, {
+    "in" : "dol::${esc",
+    "out" : "dol::${esc"
+  }, {
+    "in" : "pre\n$drefzz${$\nb:-{",
+    "out" : "pre\n$drefzz${$\nb:-{"
+  }, {
+    "in" : "zzdol:${",
+    "out" : "zzdol:${"
+  }, {
+    "in" : "{$zz$self:}d${$:",
+    "out" : "{$zz$self:}d${$:"
+  }, {
+    "in" : "}x$a:-pre:\nescself:-${zz",
+    "out" : "}x$a:-pre:\nescself:-${zz"
+  }, {
+    "in" : ":-esc${$}$$zz:ref$self",
+    "err" : "Cannot resolve variable '$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "{x:-}x\n$ref\nrefd${",
+    "out" : "{x:-}x\n$ref\nrefd${"
+  }, {
+    "in" : "{azza${escb\naesc$",
+    "out" : "{azza${escb\naesc$"
+  }, {
+    "in" : "${zzzzabb",
+    "out" : "${zzzzabb"
+  }, {
+    "in" : "d\n}d$refself:${d",
+    "out" : "d\n}d$refself:${d"
+  }, {
+    "in" : "esczz\n:-${bself{dzz$",
+    "out" : "esczz\n:-${bself{dzz$"
+  }, {
+    "in" : "bref${preref:refxxref}",
+    "err" : "Cannot resolve variable 'preref:refxxref' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "refb\n${xdolescref{\n",
+    "out" : "refb\n${xdolescref{\n"
+  }, {
+    "in" : "pre}self$${selfpre:-",
+    "out" : "pre}self$${selfpre:-"
+  }, {
+    "in" : "selfrefdol${xdol",
+    "out" : "selfrefdol${xdol"
+  }, {
+    "in" : ":pre${}adol",
+    "out" : ":preEadol"
+  }, {
+    "in" : "dself${$\n}",
+    "err" : "Cannot resolve variable '$\n' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : ":}dol{\nx\n}${:-d",
+    "out" : ":}dol{\nx\n}${:-d"
+  }, {
+    "in" : "pre{:}$:$$${zzbdol",
+    "out" : "pre{:}$:$$${zzbdol"
+  }, {
+    "in" : "zzdolref::}ref${$escdol",
+    "out" : "zzdolref::}ref${$escdol"
+  }, {
+    "in" : "}$\n::\n\n:${\n:zzd",
+    "out" : "}$\n::\n\n:${\n:zzd"
+  }, {
+    "in" : "$dol:$${esc:dref",
+    "out" : "$dol:$${esc:dref"
+  }, {
+    "in" : "zzref}\n${:-{:{esc:-esc",
+    "out" : "zzref}\n${:-{:{esc:-esc"
+  }, {
+    "in" : "{{${dol",
+    "out" : "{{${dol"
+  }, {
+    "in" : "zzref${:-x:-{a:-$$x",
+    "out" : "zzref${:-x:-{a:-$$x"
+  }, {
+    "in" : "dolpreprepre\n}:-:-${",
+    "out" : "dolpreprepre\n}:-:-${"
+  }, {
+    "in" : "}zz${$b\n{refzza",
+    "out" : "}zz${$b\n{refzza"
+  }, {
+    "in" : ":${\na\n",
+    "out" : ":${\na\n"
+  }, {
+    "in" : "refescpre\ndescesc${$",
+    "out" : "refescpre\ndescesc${$"
+  }, {
+    "in" : "prebrefb:${x",
+    "out" : "prebrefb:${x"
+  }, {
+    "in" : "preddolself${selfb",
+    "out" : "preddolself${selfb"
+  }, {
+    "in" : "${\n:-ref:-ref$prezz$x",
+    "out" : "${\n:-ref:-ref$prezz$x"
+  }, {
+    "in" : "${refdpreb${",
+    "out" : "${refdpreb${"
+  }, {
+    "in" : "::-$esc\n${dold\nd{dx",
+    "out" : "::-$esc\n${dold\nd{dx"
+  }, {
+    "in" : "zz$:b${refaselfselfref",
+    "out" : "zz$:b${refaselfselfref"
+  }, {
+    "in" : "d:-ref}prepreaself:${\n\n",
+    "out" : "d:-ref}prepreaself:${\n\n"
+  }, {
+    "in" : "refref$:refrefrefx$self${}:",
+    "out" : "refref$:refrefrefx$selfE:"
+  }, {
+    "in" : "preescpre$\n${x\n:-preesc$",
+    "out" : "preescpre$\n${x\n:-preesc$"
+  }, {
+    "in" : "dbb:-${:-d:{\npre",
+    "out" : "dbb:-${:-d:{\npre"
+  }, {
+    "in" : "d${:-predol$$pre:x}",
+    "out" : "dE"
+  }, {
+    "in" : "d:-zzdolx{${:-$predol$ref",
+    "out" : "d:-zzdolx{${:-$predol$ref"
+  }, {
+    "in" : "a\n$\n${",
+    "out" : "a\n$\n${"
+  }, {
+    "in" : "refprezz:dolbzzref\ndolpreref${",
+    "out" : "refprezz:dolbzzref\ndolpreref${"
+  }, {
+    "in" : "bdolselfrefdola${",
+    "out" : "bdolselfrefdola${"
+  }, {
+    "in" : "}{bbprerefdol${b$",
+    "out" : "}{bbprerefdol${b$"
+  }, {
+    "in" : "${$ref",
+    "out" : "${$ref"
+  }, {
+    "in" : "d{{${$zz",
+    "out" : "d{{${$zz"
+  }, {
+    "in" : "{$}zza${x$\n",
+    "out" : "{$}zza${x$\n"
+  }, {
+    "in" : "dolselfref$esc$a{\n${",
+    "out" : "dolselfref$esc$a{\n${"
+  }, {
+    "in" : "refesc$$aref:\n${refdola{",
+    "out" : "refesc$$aref:\n${refdola{"
+  }, {
+    "in" : "escself$${esc:",
+    "out" : "escself$${esc:"
+  }, {
+    "in" : "xd$${ref",
+    "out" : "xd$${ref"
+  }, {
+    "in" : "ref:-dolx$${b$prex",
+    "out" : "ref:-dolx$${b$prex"
+  }, {
+    "in" : ":ref\ndol${",
+    "out" : ":ref\ndol${"
+  }, {
+    "in" : "{zz${$ref}:bpre\npre",
+    "err" : "Cannot resolve variable '$ref' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "prepre$$zz$esc:-${b",
+    "out" : "prepre$$zz$esc:-${b"
+  }, {
+    "in" : "${b\n$",
+    "out" : "${b\n$"
+  }, {
+    "in" : "zz::-ref\nesc${",
+    "out" : "zz::-ref\nesc${"
+  }, {
+    "in" : "{b\n${$dol:",
+    "out" : "{b\n${$dol:"
+  }, {
+    "in" : "$descref}}prex${$",
+    "out" : "$descref}}prex${$"
+  }, {
+    "in" : "x}${:-bdolzzrefx",
+    "out" : "x}${:-bdolzzrefx"
+  }, {
+    "in" : "$\n${{\n",
+    "out" : "$\n${{\n"
+  }, {
+    "in" : "d${b\n$bbref",
+    "out" : "d${b\n$bbref"
+  }, {
+    "in" : "}:-dolb${zzdref:-",
+    "out" : "}:-dolb${zzdref:-"
+  }, {
+    "in" : "x${:-d:-a::-",
+    "out" : "x${:-d:-a::-"
+  }, {
+    "in" : ":-\nprepre::${dzzesc}{$",
+    "err" : "Cannot resolve variable 'dzzesc' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "selfzzself:-:${zzzz$$",
+    "out" : "selfzzself:-:${zzzz$$"
+  }, {
+    "in" : "{doldolzz{dol:-${zzzzrefbself",
+    "out" : "{doldolzz{dol:-${zzzzrefbself"
+  }, {
+    "in" : "bpre${$",
+    "out" : "bpre${$"
+  }, {
+    "in" : "esc{${selfescbbxzz$$",
+    "out" : "esc{${selfescbbxzz$$"
+  }, {
+    "in" : "selfesc:$dolzz:${",
+    "out" : "selfesc:$dolzz:${"
+  }, {
+    "in" : "{$x{$selfb${escdol}\n$",
+    "err" : "Cannot resolve variable 'escdol' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "a${ref$refbescref{x:$",
+    "out" : "a${ref$refbescref{x:$"
+  }, {
+    "in" : "\n:-${dselfpredol:-predol{:-b",
+    "out" : "\n:-${dselfpredol:-predol{:-b"
+  }, {
+    "in" : "$${xself{xbb:zzpre\n",
+    "out" : "$${xself{xbb:zzpre\n"
+  }, {
+    "in" : "x:}$$:$\n${\nb",
+    "out" : "x:}$$:$\n${\nb"
+  }, {
+    "in" : "bd\n$$$}${escd",
+    "out" : "bd\n$$$}${escd"
+  }, {
+    "in" : "escdolesc${dol",
+    "out" : "escdolesc${dol"
+  }, {
+    "in" : "aprexdol${escescb\nref",
+    "out" : "aprexdol${escescb\nref"
+  }, {
+    "in" : "$zz${a$",
+    "out" : "$zz${a$"
+  }, {
+    "in" : "\n\n${}{dolpre:d",
+    "out" : "\n\nE{dolpre:d"
+  }, {
+    "in" : "selfxzzdzz}:${a",
+    "out" : "selfxzzdzz}:${a"
+  }, {
+    "in" : "zz$${$$dol}{self",
+    "out" : "zz${$$dol}{self"
+  }, {
+    "in" : "${:$$",
+    "out" : "${:$$"
+  }, {
+    "in" : "ref}dolesc${refbdol:-zz}ad",
+    "out" : "ref}dolesczzad"
+  }, {
+    "in" : "dol${\n:-xdolpre",
+    "out" : "dol${\n:-xdolpre"
+  }, {
+    "in" : "${a{",
+    "out" : "${a{"
+  }, {
+    "in" : "d$:selfescdol${",
+    "out" : "d$:selfescdol${"
+  }, {
+    "in" : "aaaesc:-prepre$azzx${",
+    "out" : "aaaesc:-prepre$azzx${"
+  }, {
+    "in" : "zz\n${",
+    "out" : "zz\n${"
+  }, {
+    "in" : ":selfprepreesc}esc${",
+    "out" : ":selfprepreesc}esc${"
+  }, {
+    "in" : "\n$${selfa:",
+    "out" : "\n$${selfa:"
+  }, {
+    "in" : "b{{${dolrefref$self$}dol",
+    "err" : "Cannot resolve variable 'dolrefref$self$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "a\nselfa}x\n}$:${{}",
+    "err" : "Cannot resolve variable '{' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "esc:esca${aaesczzd:-zz",
+    "out" : "esc:esca${aaesczzd:-zz"
+  }, {
+    "in" : ":-x:-${\npre:-escb\nselfbzz",
+    "out" : ":-x:-${\npre:-escb\nselfbzz"
+  }, {
+    "in" : "bx${d{$}dd{",
+    "err" : "Cannot resolve variable 'd{$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "{:${dol\na",
+    "out" : "{:${dol\na"
+  }, {
+    "in" : "}azz$:dself}}d${",
+    "out" : "}azz$:dself}}d${"
+  }, {
+    "in" : "prea$:-}$a:-esc\nx${",
+    "out" : "prea$:-}$a:-esc\nx${"
+  }, {
+    "in" : "$$$:$ref}}\n$ref${",
+    "out" : "$$$:$ref}}\n$ref${"
+  }, {
+    "in" : "$esc${d${self\n{",
+    "out" : "$esc${d${self\n{"
+  }, {
+    "in" : "\n${zzesc}\nbdol$$esc",
+    "err" : "Cannot resolve variable 'zzesc' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "zz${selfzzdaself{dd:pre",
+    "out" : "zz${selfzzdaself{dd:pre"
+  }, {
+    "in" : "zzrefd:-{aesc${{ref",
+    "out" : "zzrefd:-{aesc${{ref"
+  }, {
+    "in" : ":pre:-:-:d${}dzzdd",
+    "out" : ":pre:-:-:dEdzzdd"
+  }, {
+    "in" : "}:zz}selfd}dolrefpre${zz",
+    "out" : "}:zz}selfd}dolrefpre${zz"
+  }, {
+    "in" : "dzz:-apre${}dol",
+    "out" : "dzz:-apreEdol"
+  }, {
+    "in" : "refrefdolzz${xbx}",
+    "err" : "Cannot resolve variable 'xbx' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "\n$x$refbda${",
+    "out" : "\n$x$refbda${"
+  }, {
+    "in" : ":${escdolpre\n\ndol${xpre$",
+    "out" : ":${escdolpre\n\ndol${xpre$"
+  }, {
+    "in" : "pre$$dola${$\nd:-",
+    "out" : "pre$$dola${$\nd:-"
+  }, {
+    "in" : "$arefb${}refzzb$:-self",
+    "out" : "$arefbErefzzb$:-self"
+  }, {
+    "in" : "zz{predol${${esc$escdself}",
+    "err" : "Cannot resolve variable '${esc$escdself' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "refzzpreazzzz}bx}:${a",
+    "out" : "refzzpreazzzz}bx}:${a"
+  }, {
+    "in" : "}dolzzesc${d::zz\nzz$x",
+    "out" : "}dolzzesc${d::zz\nzz$x"
+  }, {
+    "in" : "\n${$db$zz$adol}$\n",
+    "err" : "Cannot resolve variable '$db$zz$adol' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "dolself}dol$${\n:-$zzdola:",
+    "out" : "dolself}dol$${\n:-$zzdola:"
+  }, {
+    "in" : "{${zz:}$dolxref}:-{}",
+    "err" : "Cannot resolve variable 'zz:' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "dx${$$",
+    "out" : "dx${$$"
+  }, {
+    "in" : "}${prerefapre",
+    "out" : "}${prerefapre"
+  }, {
+    "in" : "dol\n:esc:-dxesc${{$zz",
+    "out" : "dol\n:esc:-dxesc${{$zz"
+  }, {
+    "in" : ":-xzz$dolzzselfdol${dol",
+    "out" : ":-xzz$dolzzselfdol${dol"
+  }, {
+    "in" : "${escself",
+    "out" : "${escself"
+  }, {
+    "in" : "x$:-$$:${xescbdol",
+    "out" : "x$:-$$:${xescbdol"
+  }, {
+    "in" : "$}$preref\n\n${",
+    "out" : "$}$preref\n\n${"
+  }, {
+    "in" : "${predola$prex$refdol",
+    "out" : "${predola$prex$refdol"
+  }, {
+    "in" : "$esc:dold:x${$}",
+    "err" : "Cannot resolve variable '$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "refxesc{d:bxself{${",
+    "out" : "refxesc{d:bxself{${"
+  }, {
+    "in" : "prea{${",
+    "out" : "prea{${"
+  }, {
+    "in" : "refself${refaself$a:",
+    "out" : "refself${refaself$a:"
+  }, {
+    "in" : "${\n:$}refescx",
+    "err" : "Cannot resolve variable '\n:$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "preself$zz${",
+    "out" : "preself$zz${"
+  }, {
+    "in" : "}${${{$::}x",
+    "err" : "Cannot resolve variable '${{$::' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "a}b$escself:$${$ref$",
+    "out" : "a}b$escself:$${$ref$"
+  }, {
+    "in" : "}\nbbref$esc${$",
+    "out" : "}\nbbref$esc${$"
+  }, {
+    "in" : "x{${",
+    "out" : "x{${"
+  }, {
+    "in" : "escself${bx",
+    "out" : "escself${bx"
+  }, {
+    "in" : "escbescd\n:dol:b$\n$${",
+    "out" : "escbescd\n:dol:b$\n$${"
+  }, {
+    "in" : "xd:-predol${{}$a",
+    "err" : "Cannot resolve variable '{' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "d${escref:dolselfx",
+    "out" : "d${escref:dolselfx"
+  }, {
+    "in" : "ref${:-bxescdxx",
+    "out" : "ref${:-bxescdxx"
+  }, {
+    "in" : "d:dolazzzzpre${b",
+    "out" : "d:dolazzzzpre${b"
+  }, {
+    "in" : "zz$${:self",
+    "out" : "zz$${:self"
+  }, {
+    "in" : "dola{a{${",
+    "out" : "dola{a{${"
+  }, {
+    "in" : "xazzselfd${:refdx",
+    "out" : "xazzselfd${:refdx"
+  }, {
+    "in" : "preadolbxa:-a{{${x:-",
+    "out" : "preadolbxa:-a{{${x:-"
+  }, {
+    "in" : ":-d${",
+    "out" : ":-d${"
+  }, {
+    "in" : "${\n$",
+    "out" : "${\n$"
+  }, {
+    "in" : "self\n\n:${predol",
+    "out" : "self\n\n:${predol"
+  }, {
+    "in" : "d$preba}{${a$selfx",
+    "out" : "d$preba}{${a$selfx"
+  }, {
+    "in" : "escbd\n:-esc${zz",
+    "out" : "escbd\n:-esc${zz"
+  }, {
+    "in" : "bself:dolescxxref\n${",
+    "out" : "bself:dolescxxref\n${"
+  }, {
+    "in" : "a$escdol{$d${selfselfzz",
+    "out" : "a$escdol{$d${selfselfzz"
+  }, {
+    "in" : "${::-$pre$:$",
+    "out" : "${::-$pre$:$"
+  }, {
+    "in" : "dol:-doldoladolx${$:\nab",
+    "out" : "dol:-doldoladolx${$:\nab"
+  }, {
+    "in" : ":d${a::-refx$b",
+    "out" : ":d${a::-refx$b"
+  }, {
+    "in" : "}${",
+    "out" : "}${"
+  }, {
+    "in" : "self$d${escd:$ref",
+    "out" : "self$d${escd:$ref"
+  }, {
+    "in" : "dd${$",
+    "out" : "dd${$"
+  }, {
+    "in" : "esc{::$a${}b::b",
+    "out" : "esc{::$aEb::b"
+  }, {
+    "in" : "ab{pre:-prezz:-\ndol::-${",
+    "out" : "ab{pre:-prezz:-\ndol::-${"
+  }, {
+    "in" : "$zzselfselfb${zz:-\n$b",
+    "out" : "$zzselfselfb${zz:-\n$b"
+  }, {
+    "in" : ":escescself${refselfb",
+    "out" : ":escescself${refselfb"
+  }, {
+    "in" : "{azzpre:-xxref${zz",
+    "out" : "{azzpre:-xxref${zz"
+  }, {
+    "in" : "{$self}:-${zzdesc$\n",
+    "out" : "{$self}:-${zzdesc$\n"
+  }, {
+    "in" : "zz\nx${d}::}\n$ref",
+    "out" : "zz\nxD::}\n$ref"
+  }, {
+    "in" : "dbpre$a${dol{ref{dolb",
+    "out" : "dbpre$a${dol{ref{dolb"
+  }, {
+    "in" : "zzescselfxd${zz$esc:dol$",
+    "out" : "zzescselfxd${zz$esc:dol$"
+  }, {
+    "in" : "x{esc}:ref${self$$",
+    "out" : "x{esc}:ref${self$$"
+  }, {
+    "in" : ":-$:-\nb$${zzdol",
+    "out" : ":-$:-\nb$${zzdol"
+  }, {
+    "in" : "selfxself}${",
+    "out" : "selfxself}${"
+  }, {
+    "in" : "\npre:a${esc::-{dolbdpre",
+    "out" : "\npre:a${esc::-{dolbdpre"
+  }, {
+    "in" : "${refa:-escself$:esc}",
+    "out" : "escself$:esc"
+  }, {
+    "in" : "pre:pre}${selfselfesc\nzzd",
+    "out" : "pre:pre}${selfselfesc\nzzd"
+  }, {
+    "in" : "${{:-x\nselfdolpreax",
+    "out" : "${{:-x\nselfdolpreax"
+  }, {
+    "in" : "drefselfrefref$refescx${",
+    "out" : "drefselfrefref$refescx${"
+  }, {
+    "in" : "b{${esc$$zz${",
+    "out" : "b{${esc$$zz${"
+  }, {
+    "in" : "pre}pre}pre${prerefselfd{",
+    "out" : "pre}pre}pre${prerefselfd{"
+  }, {
+    "in" : "self$\nbrefdref${refa:-ref$",
+    "out" : "self$\nbrefdref${refa:-ref$"
+  }, {
+    "in" : "}$:{}\nesc$${x",
+    "out" : "}$:{}\nesc$${x"
+  }, {
+    "in" : "dolesc$\n{}$${",
+    "out" : "dolesc$\n{}$${"
+  }, {
+    "in" : "zzselfa}a${aprerefpre",
+    "out" : "zzselfa}a${aprerefpre"
+  }, {
+    "in" : "ddol$prea:-\n${",
+    "out" : "ddol$prea:-\n${"
+  }, {
+    "in" : "esc$\n${bref",
+    "out" : "esc$\n${bref"
+  }, {
+    "in" : ":-xpreescx${a$:-dpreesc",
+    "out" : ":-xpreescx${a$:-dpreesc"
+  }, {
+    "in" : "$}ref}zz:dzzdol${",
+    "out" : "$}ref}zz:dzzdol${"
+  }, {
+    "in" : "x${ddolb\nd:-xdolpre",
+    "out" : "x${ddolb\nd:-xdolpre"
+  }, {
+    "in" : "descesc${$\n:-",
+    "out" : "descesc${$\n:-"
+  }, {
+    "in" : "ref$refdol${dolpre:-pre",
+    "out" : "ref$refdol${dolpre:-pre"
+  }, {
+    "in" : "${a\nref:-zzzz:selfbesc",
+    "out" : "${a\nref:-zzzz:selfbesc"
+  }, {
+    "in" : "x}zzzzd$${zz",
+    "out" : "x}zzzzd$${zz"
+  }, {
+    "in" : "$}$refselfdescddol${:escdol",
+    "out" : "$}$refselfdescddol${:escdol"
+  }, {
+    "in" : "}:-}{zzx$selfref${esc",
+    "out" : "}:-}{zzx$selfref${esc"
+  }, {
+    "in" : "refx}${{dol}bdol}a",
+    "err" : "Cannot resolve variable '{dol' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "dolesc{:-a${selfpre{bdol",
+    "out" : "dolesc{:-a${selfpre{bdol"
+  }, {
+    "in" : "$dpre{self{refax$${d",
+    "out" : "$dpre{self{refax$${d"
+  }, {
+    "in" : "d:-d$${dol{ddprepre",
+    "out" : "d:-d$${dol{ddprepre"
+  }, {
+    "in" : "{x}selfx$${escpreaprexself",
+    "out" : "{x}selfx$${escpreaprexself"
+  }, {
+    "in" : "${b",
+    "out" : "${b"
+  }, {
+    "in" : "ref$dol$pre::dol\nzzself${",
+    "out" : "ref$dol$pre::dol\nzzself${"
+  }, {
+    "in" : "${{:-{a:b::-$dola",
+    "out" : "${{:-{a:b::-$dola"
+  }, {
+    "in" : ":-a{{{refdzz\n${dda",
+    "out" : ":-a{{{refdzz\n${dda"
+  }, {
+    "in" : "$:esc}$}$${{d:",
+    "out" : "$:esc}$}$${{d:"
+  }, {
+    "in" : "$b:$${refdolzzref$dzz$",
+    "out" : "$b:$${refdolzzref$dzz$"
+  }, {
+    "in" : "{refesc${",
+    "out" : "{refesc${"
+  }, {
+    "in" : "{${preref{",
+    "out" : "{${preref{"
+  }, {
+    "in" : "refref\ndol:pre$refpreself${$",
+    "out" : "refref\ndol:pre$refpreself${$"
+  }, {
+    "in" : ":x${",
+    "out" : ":x${"
+  }, {
+    "in" : ":dzz:-pre${",
+    "out" : ":dzz:-pre${"
+  }, {
+    "in" : "::-${ref:-zz:-d\n\n}",
+    "out" : "::-A"
+  }, {
+    "in" : "{:-${",
+    "out" : "{:-${"
+  }, {
+    "in" : "x${zzdolx\n",
+    "out" : "x${zzdolx\n"
+  }, {
+    "in" : "self${}{ref",
+    "out" : "selfE{ref"
+  }, {
+    "in" : "${prex$",
+    "out" : "${prex$"
+  }, {
+    "in" : "$}${:esc",
+    "out" : "$}${:esc"
+  }, {
+    "in" : "self\nd{${{a:azzd}",
+    "err" : "Cannot resolve variable '{a:azzd' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$\nesc$d\nbself${",
+    "out" : "$\nesc$d\nbself${"
+  }, {
+    "in" : ":${}",
+    "out" : ":E"
+  }, {
+    "in" : "zzself{\n\nselfazz${xescb",
+    "out" : "zzself{\n\nselfazz${xescb"
+  }, {
+    "in" : "refescd${esc",
+    "out" : "refescd${esc"
+  }, {
+    "in" : "\nzz:-x${dolselfd}:-ref}\n",
+    "err" : "Cannot resolve variable 'dolselfd' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "prezzdolpre{${zz::-",
+    "out" : "prezzdolpre{${zz::-"
+  }, {
+    "in" : "bpre{x}${}:dol",
+    "out" : "bpre{x}E:dol"
+  }, {
+    "in" : ":refrefpre{${pre:-dol$",
+    "out" : ":refrefpre{${pre:-dol$"
+  }, {
+    "in" : "dolb}}:zza:-${self\nself",
+    "out" : "dolb}}:zza:-${self\nself"
+  }, {
+    "in" : "pre:-${",
+    "out" : "pre:-${"
+  }, {
+    "in" : "${esc{pre}{pre${:pre$",
+    "err" : "Cannot resolve variable 'esc{pre' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$pre${dold:selfesc:$",
+    "out" : "$pre${dold:selfesc:$"
+  }, {
+    "in" : "}:${{zzb$azzpre\n:x",
+    "out" : "}:${{zzb$azzpre\n:x"
+  }, {
+    "in" : "ref$x{$self${$$:",
+    "out" : "ref$x{$self${$$:"
+  }, {
+    "in" : "aapreselfprebbzzref${d{",
+    "out" : "aapreselfprebbzzref${d{"
+  }, {
+    "in" : "${$b:-d:-bd}a$\n",
+    "out" : "d:-bda$\n"
+  }, {
+    "in" : "$${self}:dol",
+    "out" : "${self}:dol"
+  }, {
+    "in" : "xrefescpre${predol",
+    "out" : "xrefescpre${predol"
+  }, {
+    "in" : "{xpre\n:{escbxarefb${",
+    "out" : "{xpre\n:{escbxarefb${"
+  }, {
+    "in" : "zzb${dref",
+    "out" : "zzb${dref"
+  }, {
+    "in" : "$${azza$desc$esc",
+    "out" : "$${azza$desc$esc"
+  }, {
+    "in" : "\nrefselfzzpre{esc\n:${b",
+    "out" : "\nrefselfzzpre{esc\n:${b"
+  }, {
+    "in" : "a}$\n{:-$${",
+    "out" : "a}$\n{:-$${"
+  }, {
+    "in" : "xpre{:zz${pre:xzzpre{{",
+    "out" : "xpre{:zz${pre:xzzpre{{"
+  }, {
+    "in" : "{bx${x$zz$dolx",
+    "out" : "{bx${x$zz$dolx"
+  }, {
+    "in" : "{zzself:-${\nb\nzz",
+    "out" : "{zzself:-${\nb\nzz"
+  }, {
+    "in" : "$zz{escref{dbb${",
+    "out" : "$zz{escref{dbb${"
+  }, {
+    "in" : "$${dol}",
+    "out" : "${dol}"
+  }, {
+    "in" : ":\na}\n}db${escpre",
+    "out" : ":\na}\n}db${escpre"
+  }, {
+    "in" : "dolxpreref${zzself",
+    "out" : "dolxpreref${zzself"
+  }, {
+    "in" : "$d:-:-pre${}$escesc:",
+    "out" : "$d:-:-preE$escesc:"
+  }, {
+    "in" : "adescref$$adol${esc\ndola",
+    "out" : "adescref$$adol${esc\ndola"
+  }, {
+    "in" : "a}d${:-:",
+    "out" : "a}d${:-:"
+  }, {
+    "in" : "da{aazzd{${zz",
+    "out" : "da{aazzd{${zz"
+  }, {
+    "in" : "$b${\npred:-desc$selfax",
+    "out" : "$b${\npred:-desc$selfax"
+  }, {
+    "in" : "}x\n:-{${\n\na{\nselfzz",
+    "out" : "}x\n:-{${\n\na{\nselfzz"
+  }, {
+    "in" : "dol\nxbescpre${",
+    "out" : "dol\nxbescpre${"
+  }, {
+    "in" : ":dol\nx:x}${",
+    "out" : ":dol\nx:x}${"
+  }, {
+    "in" : ":-d${dolself:-x}a}",
+    "out" : ":-dxa}"
+  }, {
+    "in" : "prex$${",
+    "out" : "prex$${"
+  }, {
+    "in" : "$xb${:-\n",
+    "out" : "$xb${:-\n"
+  }, {
+    "in" : "${x$",
+    "out" : "${x$"
+  }, {
+    "in" : "}escescrefaselfref${}esca",
+    "out" : "}escescrefaselfrefEesca"
+  }, {
+    "in" : "dol$predolref${selfself$dolesc",
+    "out" : "dol$predolref${selfself$dolesc"
+  }, {
+    "in" : "$${}pre:-",
+    "out" : "${}pre:-"
+  }, {
+    "in" : "selfpre}:-selfselfx${",
+    "out" : "selfpre}:-selfselfx${"
+  }, {
+    "in" : "d${:-dolzz",
+    "out" : "d${:-dolzz"
+  }, {
+    "in" : "${dxx",
+    "out" : "${dxx"
+  }, {
+    "in" : "refself{${$pre{x$}",
+    "err" : "Cannot resolve variable '$pre{x$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : ":-:-selfdolx:${:-prezzx",
+    "out" : ":-:-selfdolx:${:-prezzx"
+  }, {
+    "in" : "escref\n${dself{selfa$\nprepre",
+    "out" : "escref\n${dself{selfa$\nprepre"
+  }, {
+    "in" : "escxxescselfdol${pre\nrefpreapre",
+    "out" : "escxxescselfdol${pre\nrefpreapre"
+  }, {
+    "in" : "${\npre$:-",
+    "out" : "${\npre$:-"
+  }, {
+    "in" : "esc$self{dol$${d$",
+    "out" : "esc$self{dol$${d$"
+  }, {
+    "in" : "abpre${:-selfa{\ndesc",
+    "out" : "abpre${:-selfa{\ndesc"
+  }, {
+    "in" : "esczz$\n$escdb}esc${$",
+    "out" : "esczz$\n$escdb}esc${$"
+  }, {
+    "in" : ":-{ref{:-arefx${{$xesc",
+    "out" : ":-{ref{:-arefx${{$xesc"
+  }, {
+    "in" : "${:-:pre\nzz:",
+    "out" : "${:-:pre\nzz:"
+  }, {
+    "in" : ":-${:bbescdol",
+    "out" : ":-${:bbescdol"
+  }, {
+    "in" : "{$${dol}",
+    "out" : "{${dol}"
+  }, {
+    "in" : ":-zzx${",
+    "out" : ":-zzx${"
+  }, {
+    "in" : ":adoldolprezzzz${:xdol",
+    "out" : ":adoldolprezzzz${:xdol"
+  }, {
+    "in" : "d${",
+    "out" : "d${"
+  }, {
+    "in" : "d:ad\ndol}zzdol${",
+    "out" : "d:ad\ndol}zzdol${"
+  }, {
+    "in" : "selfref${x\nxescselfrefd{dolb",
+    "out" : "selfref${x\nxescselfrefd{dolb"
+  }, {
+    "in" : "$${self$bdol}",
+    "out" : "${self$bdol}"
+  }, {
+    "in" : "${escdolpreescesca:-esc}{dol",
+    "out" : "esc{dol"
+  }, {
+    "in" : "ref${escdref$b",
+    "out" : "ref${escdref$b"
+  }, {
+    "in" : "\n${dzzdolselfselfdzzprex:",
+    "out" : "\n${dzzdolselfselfdzzprex:"
+  }, {
+    "in" : "dol${aapred:-dold",
+    "out" : "dol${aapred:-dold"
+  }, {
+    "in" : "adol\nprex$${escxzz\nself",
+    "out" : "adol\nprex$${escxzz\nself"
+  }, {
+    "in" : "}b${::-:",
+    "out" : "}b${::-:"
+  }, {
+    "in" : "$dola${:esc",
+    "out" : "$dola${:esc"
+  }, {
+    "in" : "a{{${",
+    "out" : "a{{${"
+  }, {
+    "in" : "xrefb${:-}:-dol",
+    "out" : "xrefbE:-dol"
+  }, {
+    "in" : ":\nx}self:-preesc:-${ddzz",
+    "out" : ":\nx}self:-preesc:-${ddzz"
+  }, {
+    "in" : "bpre${\nd",
+    "out" : "bpre${\nd"
+  }, {
+    "in" : "${abself{pre",
+    "out" : "${abself{pre"
+  }, {
+    "in" : "preb$self${xd:-",
+    "out" : "preb$self${xd:-"
+  }, {
+    "in" : "${selfref:",
+    "out" : "${selfref:"
+  }, {
+    "in" : ":-x${d",
+    "out" : ":-x${d"
+  }, {
+    "in" : "${ref\ndb\n",
+    "out" : "${ref\ndb\n"
+  }, {
+    "in" : "d${:-zzesc${",
+    "out" : "d${:-zzesc${"
+  }, {
+    "in" : "esc$}}$$dol${escb:",
+    "out" : "esc$}}$$dol${escb:"
+  }, {
+    "in" : ":}$${$",
+    "out" : ":}$${$"
+  }, {
+    "in" : "$refesc{x\nselfesc{$${ref",
+    "out" : "$refesc{x\nselfesc{$${ref"
+  }, {
+    "in" : "${$bdol}escpredolref",
+    "err" : "Cannot resolve variable '$bdol' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "predd{:$}ref}${{zzx",
+    "out" : "predd{:$}ref}${{zzx"
+  }, {
+    "in" : "$zzabdol\n\na${x",
+    "out" : "$zzabdol\n\na${x"
+  }, {
+    "in" : "b${{}escx\nrefzzref\n",
+    "err" : "Cannot resolve variable '{' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${a}ref$\n\n$$",
+    "out" : "Aref$\n\n$$"
+  }, {
+    "in" : "}selfzzzz:zzescbdol:${",
+    "out" : "}selfzzzz:zzescbdol:${"
+  }, {
+    "in" : "a\nprezz${}$prepreself",
+    "out" : "a\nprezzE$prepreself"
+  }, {
+    "in" : ":-${:-:-:pre:-b:d$",
+    "out" : ":-${:-:-:pre:-b:d$"
+  }, {
+    "in" : "::-selfesc:-${\nb",
+    "out" : "::-selfesc:-${\nb"
+  }, {
+    "in" : "}preesc}:-$x:-${\n",
+    "out" : "}preesc}:-$x:-${\n"
+  }, {
+    "in" : "xdolref${",
+    "out" : "xdolref${"
+  }, {
+    "in" : "$b${aref}esc",
+    "err" : "Cannot resolve variable 'aref' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "\npredolref:-zzad${",
+    "out" : "\npredolref:-zzad${"
+  }, {
+    "in" : "}\nxref:-$b:${\n",
+    "out" : "}\nxref:-$b:${\n"
+  }, {
+    "in" : "{:-self${",
+    "out" : "{:-self${"
+  }, {
+    "in" : "self}:$a\n\n${zzb$:esc",
+    "out" : "self}:$a\n\n${zzb$:esc"
+  }, {
+    "in" : "${b}zza$$dol$dselfself",
+    "out" : "Bzza$$dol$dselfself"
+  }, {
+    "in" : "descesczz:-a${$:ax$pre",
+    "out" : "descesczz:-a${$:ax$pre"
+  }, {
+    "in" : "${dolescselfxrefa",
+    "out" : "${dolescselfxrefa"
+  }, {
+    "in" : "esc${pre",
+    "out" : "esc${pre"
+  }, {
+    "in" : "${$:{",
+    "out" : "${$:{"
+  }, {
+    "in" : "}a:-dol$self${x{",
+    "out" : "}a:-dol$self${x{"
+  }, {
+    "in" : "zz${",
+    "out" : "zz${"
+  }, {
+    "in" : "}predol${dd$esc$:self",
+    "out" : "}predol${dd$esc$:self"
+  }, {
+    "in" : "\nref${pre",
+    "out" : "\nref${pre"
+  }, {
+    "in" : "dolzz:-zz${{{zz",
+    "out" : "dolzz:-zz${{{zz"
+  }, {
+    "in" : "bax${",
+    "out" : "bax${"
+  }, {
+    "in" : "bescpre${esc}da",
+    "out" : "bescpre${a}da"
+  }, {
+    "in" : ":$esc:x\n}}zz${$:",
+    "out" : ":$esc:x\n}}zz${$:"
+  }, {
+    "in" : "self}dzz${$a:-dol",
+    "out" : "self}dzz${$a:-dol"
+  }, {
+    "in" : "}esc{\n:-dolxbd${",
+    "out" : "}esc{\n:-dolxbd${"
+  }, {
+    "in" : "${:-}",
+    "out" : "E"
+  }, {
+    "in" : "d$:dol:x${}:-x{",
+    "out" : "d$:dol:xE:-x{"
+  }, {
+    "in" : "$$}zzx\nx${d}\n{",
+    "out" : "$$}zzx\nxD\n{"
+  }, {
+    "in" : ":-xzzself$}}x${ref{esc}",
+    "err" : "Cannot resolve variable 'ref{esc' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$preself${::bpre$d",
+    "out" : "$preself${::bpre$d"
+  }, {
+    "in" : "$${dolbrefa{dself:-:x",
+    "out" : "$${dolbrefa{dself:-:x"
+  }, {
+    "in" : "\nbdolesc:ref${ab:-$",
+    "out" : "\nbdolesc:ref${ab:-$"
+  }, {
+    "in" : "}xbselfesc}${escescdaref",
+    "out" : "}xbselfesc}${escescdaref"
+  }, {
+    "in" : "dol}esc$zzref${zzpre\nzzzz",
+    "out" : "dol}esc$zzref${zzpre\nzzzz"
+  }, {
+    "in" : "}self${xd",
+    "out" : "}self${xd"
+  }, {
+    "in" : "{dolx:-d${refxdol}$$b",
+    "err" : "Cannot resolve variable 'refxdol' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : ":}bprex:-${dol}ad:-:",
+    "out" : ":}bprex:-$ad:-:"
+  }, {
+    "in" : "}escdself$selfdol${}dol",
+    "out" : "}escdself$selfdolEdol"
+  }, {
+    "in" : "{selfdol{:zz{xaab${dol",
+    "out" : "{selfdol{:zz{xaab${dol"
+  }, {
+    "in" : "bdolesc${\nx:-$x",
+    "out" : "bdolesc${\nx:-$x"
+  }, {
+    "in" : "xzzxa${}esc}d$self\n",
+    "out" : "xzzxaEesc}d$self\n"
+  }, {
+    "in" : "ref\nselfprezzrefesc${",
+    "out" : "ref\nselfprezzrefesc${"
+  }, {
+    "in" : "bzz\nddolself${refzz{refdself",
+    "out" : "bzz\nddolself${refzz{refdself"
+  }, {
+    "in" : "$:-${:$ref{",
+    "out" : "$:-${:$ref{"
+  }, {
+    "in" : "${dref",
+    "out" : "${dref"
+  }, {
+    "in" : "$self{selfzz${dol",
+    "out" : "$self{selfzz${dol"
+  }, {
+    "in" : "d:-${b$$selfbd:\n$",
+    "out" : "d:-${b$$selfbd:\n$"
+  }, {
+    "in" : "${aesc:doldol:-dol:",
+    "out" : "${aesc:doldol:-dol:"
+  }, {
+    "in" : "$${esc}$x{selfprezzrefxb",
+    "out" : "${esc}$x{selfprezzrefxb"
+  }, {
+    "in" : "d$:-x\n${:-bdol${",
+    "out" : "d$:-x\n${:-bdol${"
+  }, {
+    "in" : "${dol{d:bdpre",
+    "out" : "${dol{d:bdpre"
+  }, {
+    "in" : "$refxrefrefpre}}:{${",
+    "out" : "$refxrefrefpre}}:{${"
+  }, {
+    "in" : "zz:-a\nxxrefesc\n${$selfx",
+    "out" : "zz:-a\nxxrefesc\n${$selfx"
+  }, {
+    "in" : "}b${preesc$:}",
+    "err" : "Cannot resolve variable 'preesc$:' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "pre{xbb${esc:-:zzself\nself",
+    "out" : "pre{xbb${esc:-:zzself\nself"
+  }, {
+    "in" : "refzz${aesc$ref}$}",
+    "err" : "Cannot resolve variable 'aesc$ref' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "a}$ref${zz{a$pre",
+    "out" : "a}$ref${zz{a$pre"
+  }, {
+    "in" : "x}}{:ref${$:x",
+    "out" : "x}}{:ref${$:x"
+  }, {
+    "in" : "$${:-doldzzescb",
+    "out" : "$${:-doldzzescb"
+  }, {
+    "in" : "{x${xd\n\n",
+    "out" : "{x${xd\n\n"
+  }, {
+    "in" : "${selfescesc{:-",
+    "out" : "${selfescesc{:-"
+  }, {
+    "in" : "escdol:ref$$esc${selfesc",
+    "out" : "escdol:ref$$esc${selfesc"
+  }, {
+    "in" : "dolrefselfxb${dold}\nref",
+    "err" : "Cannot resolve variable 'dold' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${pre$:refprebdol",
+    "out" : "${pre$:refprebdol"
+  }, {
+    "in" : "selfzz${:d{$a$esc\n",
+    "out" : "selfzz${:d{$a$esc\n"
+  }, {
+    "in" : "$$prezza$:${:-b",
+    "out" : "$$prezza$:${:-b"
+  }, {
+    "in" : "${aself",
+    "out" : "${aself"
+  }, {
+    "in" : "escselfpre:refpre{{a$${",
+    "out" : "escselfpre:refpre{{a$${"
+  }, {
+    "in" : "zzescrefa${$:pre:-",
+    "out" : "zzescrefa${$:pre:-"
+  }, {
+    "in" : "aa${a}:",
+    "out" : "aaA:"
+  }, {
+    "in" : ":-dold:-${aref\n",
+    "out" : ":-dold:-${aref\n"
+  }, {
+    "in" : "dselfself$${",
+    "out" : "dselfself$${"
+  }, {
+    "in" : "\n$x\naa:-${",
+    "out" : "\n$x\naa:-${"
+  }, {
+    "in" : "self${",
+    "out" : "self${"
+  }, {
+    "in" : "${:{\n$",
+    "out" : "${:{\n$"
+  }, {
+    "in" : "${x:-$refself",
+    "out" : "${x:-$refself"
+  }, {
+    "in" : "bselfpre${b",
+    "out" : "bselfpre${b"
+  }, {
+    "in" : "}refdol$selfesca${refa$:-",
+    "out" : "}refdol$selfesca${refa$:-"
+  }, {
+    "in" : "brefadolself\n}$:-${",
+    "out" : "brefadolself\n}$:-${"
+  }, {
+    "in" : "\nx\n:x:-refx${self}ab",
+    "err" : "Infinite loop in property interpolation of ${self}a: self"
+  }, {
+    "in" : ":a${",
+    "out" : ":a${"
+  }, {
+    "in" : "escx{\n${}{:esc",
+    "out" : "escx{\nE{:esc"
+  }, {
+    "in" : "arefzzba\nzz${{",
+    "out" : "arefzzba\nzz${{"
+  }, {
+    "in" : "dol${self$",
+    "out" : "dol${self$"
+  }, {
+    "in" : "$xa${$}selfref}a",
+    "err" : "Cannot resolve variable '$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "dd${dol$a}{{zzzzselfref",
+    "err" : "Cannot resolve variable 'dol$a' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${zzdold}",
+    "err" : "Cannot resolve variable 'zzdold' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : ":$${:-",
+    "out" : ":$${:-"
+  }, {
+    "in" : "dol${$:-:-d\n}azzdold{",
+    "out" : "dol:-d\nazzdold{"
+  }, {
+    "in" : "b${bdolesc$:-bpreselfa$",
+    "out" : "b${bdolesc$:-bpreselfa$"
+  }, {
+    "in" : "a\nd$$${\nx$refpre\n",
+    "out" : "a\nd$$${\nx$refpre\n"
+  }, {
+    "in" : "$dol${refpreselfescdol",
+    "out" : "$dol${refpreselfescdol"
+  }, {
+    "in" : "esc$${$bddda::-d",
+    "out" : "esc$${$bddda::-d"
+  }, {
+    "in" : "self\n}}a{$refzz${dol",
+    "out" : "self\n}}a{$refzz${dol"
+  }, {
+    "in" : "xescprex${}}self",
+    "out" : "xescprexE}self"
+  }, {
+    "in" : "{x}xzz:-${:dol::-b",
+    "out" : "{x}xzz:-${:dol::-b"
+  }, {
+    "in" : "d{$$ref}d}${${",
+    "out" : "d{$$ref}d}${${"
+  }, {
+    "in" : ":-adol}ref$zz${ref",
+    "out" : ":-adol}ref$zz${ref"
+  }, {
+    "in" : "$x$dolbb:{${$",
+    "out" : "$x$dolbb:{${$"
+  }, {
+    "in" : "zz$\nprezzpreb${dol\nd$ref",
+    "out" : "zz$\nprezzpreb${dol\nd$ref"
+  }, {
+    "in" : "ad$ab\ndol${selfbd",
+    "out" : "ad$ab\ndol${selfbd"
+  }, {
+    "in" : "doldrefaa$refb${$self\n",
+    "out" : "doldrefaa$refb${$self\n"
+  }, {
+    "in" : ":${",
+    "out" : ":${"
+  }, {
+    "in" : "zzescaadol${esc",
+    "out" : "zzescaadol${esc"
+  }, {
+    "in" : "self:-$$${",
+    "out" : "self:-$$${"
+  }, {
+    "in" : "$self$dol${$:-preescescdself",
+    "out" : "$self$dol${$:-preescescdself"
+  }, {
+    "in" : "dol:zzref${b:-abrefdol",
+    "out" : "dol:zzref${b:-abrefdol"
+  }, {
+    "in" : "zzxaselfzzref${aesc}",
+    "err" : "Cannot resolve variable 'aesc' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "dolabzz\nxa$}${ref",
+    "out" : "dolabzz\nxa$}${ref"
+  }, {
+    "in" : "dol${bd}doldbxselfx$",
+    "err" : "Cannot resolve variable 'bd' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "a$x:-b$d${{$a\n",
+    "out" : "a$x:-b$d${{$a\n"
+  }, {
+    "in" : "{x${\nprezz",
+    "out" : "{x${\nprezz"
+  }, {
+    "in" : "ref\nself${pre",
+    "out" : "ref\nself${pre"
+  }, {
+    "in" : "$bref${zz:-",
+    "out" : "$bref${zz:-"
+  }, {
+    "in" : "${{\nprepre$$\n::-a{:",
+    "out" : "${{\nprepre$$\n::-a{:"
+  }, {
+    "in" : ":-\n${xselfxrefxesc",
+    "out" : ":-\n${xselfxrefxesc"
+  }, {
+    "in" : ":selfpreb}a$b${ref$",
+    "out" : ":selfpreb}a$b${ref$"
+  }, {
+    "in" : "b\nself{$${baa$esczz{",
+    "out" : "b\nself{$${baa$esczz{"
+  }, {
+    "in" : "${dolselfpre:-esc{a{dxref",
+    "out" : "${dolselfpre:-esc{a{dxref"
+  }, {
+    "in" : "dselfdolzzx${:refesc",
+    "out" : "dselfdolzzx${:refesc"
+  }, {
+    "in" : "a\n:\nref$:${:\nzz",
+    "out" : "a\n:\nref$:${:\nzz"
+  }, {
+    "in" : "${b:-a",
+    "out" : "${b:-a"
+  }, {
+    "in" : "zzdb\nb$$}${\n",
+    "out" : "zzdb\nb$$}${\n"
+  }, {
+    "in" : "${::-escselfdold",
+    "out" : "${::-escselfdold"
+  }, {
+    "in" : "escd\ndolpreaesc${pre",
+    "out" : "escd\ndolpreaesc${pre"
+  }, {
+    "in" : "{a}${:$$preesc",
+    "out" : "{a}${:$$preesc"
+  }, {
+    "in" : "{${{pre$",
+    "out" : "{${{pre$"
+  }, {
+    "in" : "{dolxzz}refb${:-bzz",
+    "out" : "{dolxzz}refb${:-bzz"
+  }, {
+    "in" : "${}escrefd",
+    "out" : "Eescrefd"
+  }, {
+    "in" : "\nzz}a$ref$${:-",
+    "out" : "\nzz}a$ref$${:-"
+  }, {
+    "in" : "\ndol${",
+    "out" : "\ndol${"
+  }, {
+    "in" : "x$drefesc${self$",
+    "out" : "x$drefesc${self$"
+  }, {
+    "in" : "doldola$selfprerefprepre${d\n",
+    "out" : "doldola$selfprerefprepre${d\n"
+  }, {
+    "in" : "${{selfdolpreescpreself}$",
+    "err" : "Cannot resolve variable '{selfdolpreescpreself' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "dol$${esc}",
+    "out" : "dol${esc}"
+  }, {
+    "in" : "a{dold${}selfdoladdol\n",
+    "out" : "a{doldEselfdoladdol\n"
+  }, {
+    "in" : ":-self:${",
+    "out" : ":-self:${"
+  }, {
+    "in" : "self${dol:zz",
+    "out" : "self${dol:zz"
+  }, {
+    "in" : "ab\n{{$${",
+    "out" : "ab\n{{$${"
+  }, {
+    "in" : "dprea${$:-\n:refx:d:",
+    "out" : "dprea${$:-\n:refx:d:"
+  }, {
+    "in" : "esc}pre${refaprea",
+    "out" : "esc}pre${refaprea"
+  }, {
+    "in" : "$$${{adolbref",
+    "out" : "$$${{adolbref"
+  }, {
+    "in" : "${$aescpre:ddold$dolrefref",
+    "out" : "${$aescpre:ddold$dolrefref"
+  }, {
+    "in" : "${xx$$$dol$ref:esc{d",
+    "out" : "${xx$$$dol$ref:esc{d"
+  }, {
+    "in" : "prezz$refdolxesc${$$",
+    "out" : "prezz$refdolxesc${$$"
+  }, {
+    "in" : "self$${",
+    "out" : "self$${"
+  }, {
+    "in" : "}apread:-prea${$b",
+    "out" : "}apread:-prea${$b"
+  }, {
+    "in" : "\n${prea{da$",
+    "out" : "\n${prea{da$"
+  }, {
+    "in" : "{{dolescd$\nselfref{esc${:-",
+    "out" : "{{dolescd$\nselfref{esc${:-"
+  }, {
+    "in" : "${zz{prezzd{xpredesc",
+    "out" : "${zz{prezzd{xpredesc"
+  }, {
+    "in" : "d:-}}$}zz{ref${$aself",
+    "out" : "d:-}}$}zz{ref${$aself"
+  }, {
+    "in" : ":-refesc${escx",
+    "out" : ":-refesc${escx"
+  }, {
+    "in" : "$}\nprex}dx$x:-${dol",
+    "out" : "$}\nprex}dx$x:-${dol"
+  }, {
+    "in" : "pre}${:-:",
+    "out" : "pre}${:-:"
+  }, {
+    "in" : "$$${:-refselfd$}",
+    "out" : "$${:-refselfd$}"
+  }, {
+    "in" : "dolrefxref::{x${escdolx",
+    "out" : "dolrefxref::{x${escdolx"
+  }, {
+    "in" : "esczz${esc}x}bzz:-{::-",
+    "out" : "esczz${a}x}bzz:-{::-"
+  }, {
+    "in" : "bxpre:$${$b:{b\n$",
+    "out" : "bxpre:$${$b:{b\n$"
+  }, {
+    "in" : "${$pre:-escescpre{esc:-{}",
+    "out" : "escescpre{esc:-{"
+  }, {
+    "in" : "$d{:-${b",
+    "out" : "$d{:-${b"
+  }, {
+    "in" : "${escselfrefdol}refd:-",
+    "err" : "Cannot resolve variable 'escselfrefdol' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "}{$${x",
+    "out" : "}{$${x"
+  }, {
+    "in" : "${ref$",
+    "out" : "${ref$"
+  }, {
+    "in" : "dola:-$dol{esc:-zzprezz${",
+    "out" : "dola:-$dol{esc:-zzprezz${"
+  }, {
+    "in" : ":{${xddolrefx",
+    "out" : ":{${xddolrefx"
+  }, {
+    "in" : "{aescselfzz}self}${",
+    "out" : "{aescselfzz}self}${"
+  }, {
+    "in" : "bxdolbbb${:",
+    "out" : "bxdolbbb${:"
+  }, {
+    "in" : "}dol$\n${d${a}:-a\n",
+    "err" : "Cannot resolve variable 'd${a' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : ":pre:-$ref}${b}b}$",
+    "out" : ":pre:-$ref}Bb}$"
+  }, {
+    "in" : "\nrefaself$$}selfpre${dzzref",
+    "out" : "\nrefaself$$}selfpre${dzzref"
+  }, {
+    "in" : "$a${\n:bref}esc}b\nd",
+    "err" : "Cannot resolve variable '\n:bref' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "d${b\nad$ab\nescpre",
+    "out" : "d${b\nad$ab\nescpre"
+  }, {
+    "in" : "prebx:selfdxesc}zzzzb${",
+    "out" : "prebx:selfdxesc}zzzzb${"
+  }, {
+    "in" : "${dolesc$",
+    "out" : "${dolesc$"
+  }, {
+    "in" : "ddol$dself${d",
+    "out" : "ddol$dself${d"
+  }, {
+    "in" : "::${dolab{a$pre",
+    "out" : "::${dolab{a$pre"
+  }, {
+    "in" : "$}b\n:$preselfabref${",
+    "out" : "$}b\n:$preselfabref${"
+  }, {
+    "in" : "dolpre}ref${{",
+    "out" : "dolpre}ref${{"
+  }, {
+    "in" : "{{dol${$dol:-b:-",
+    "out" : "{{dol${$dol:-b:-"
+  }, {
+    "in" : "${\n",
+    "out" : "${\n"
+  }, {
+    "in" : "}${\npre:-zzprerefdescx",
+    "out" : "}${\npre:-zzprerefdescx"
+  }, {
+    "in" : "\nbesca:${prex:bb{:",
+    "out" : "\nbesca:${prex:bb{:"
+  }, {
+    "in" : ":${::-}:selfdoldol$b{:-",
+    "out" : "::selfdoldol$b{:-"
+  }, {
+    "in" : ":brefx:-${esc:$$esc$",
+    "out" : ":brefx:-${esc:$$esc$"
+  }, {
+    "in" : "dref:-${}ref:}a",
+    "out" : "dref:-Eref:}a"
+  }, {
+    "in" : "${doldolref}esc{predd",
+    "err" : "Cannot resolve variable 'doldolref' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "xpre{esc{dol{dol${:-b",
+    "out" : "xpre{esc{dol{dol${:-b"
+  }, {
+    "in" : "doldol:}xdadol}$selfesc${",
+    "out" : "doldol:}xdadol}$selfesc${"
+  }, {
+    "in" : "${zzpre",
+    "out" : "${zzpre"
+  }, {
+    "in" : "b$}${zzxdxx",
+    "out" : "b$}${zzxdxx"
+  }, {
+    "in" : "xdol$dolxx::${$b",
+    "out" : "xdol$dolxx::${$b"
+  }, {
+    "in" : ":b${",
+    "out" : ":b${"
+  }, {
+    "in" : "{prerefaxesc${selfd$a",
+    "out" : "{prerefaxesc${selfd$a"
+  }, {
+    "in" : ":\n{x${self}$azza:-$",
+    "err" : "Infinite loop in property interpolation of ${self}$: self"
+  }, {
+    "in" : "ad::-:-d}${a$",
+    "out" : "ad::-:-d}${a$"
+  }, {
+    "in" : ":bzzself${esc$bx:-:dol",
+    "out" : ":bzzself${esc$bx:-:dol"
+  }, {
+    "in" : "a\npreaa:-$\n${zzb",
+    "out" : "a\npreaa:-$\n${zzb"
+  }, {
+    "in" : ":b${}{zz{{",
+    "out" : ":bE{zz{{"
+  }, {
+    "in" : "pre${predol",
+    "out" : "pre${predol"
+  }, {
+    "in" : "${prerefesc$:esc",
+    "out" : "${prerefesc$:esc"
+  }, {
+    "in" : "pre\n$}${preb$$d\n",
+    "out" : "pre\n$}${preb$$d\n"
+  }, {
+    "in" : ":-refzzdol}dolbd${:\n\n\n",
+    "out" : ":-refzzdol}dolbd${:\n\n\n"
+  }, {
+    "in" : "zzbaescself$${xx$:esc",
+    "out" : "zzbaescself$${xx$:esc"
+  }, {
+    "in" : "}:zz${refdol{",
+    "out" : "}:zz${refdol{"
+  }, {
+    "in" : "dol}{bself${ref${x",
+    "out" : "dol}{bself${ref${x"
+  }, {
+    "in" : "zzself:da${refzzself:-\nself",
+    "out" : "zzself:da${refzzself:-\nself"
+  }, {
+    "in" : ":\n\n$ref:preself$$${",
+    "out" : ":\n\n$ref:preself$$${"
+  }, {
+    "in" : ":-dprezz$escself$${pre$b",
+    "out" : ":-dprezz$escself$${pre$b"
+  }, {
+    "in" : "zz}esc${x$:-",
+    "out" : "zz}esc${x$:-"
+  }, {
+    "in" : "$${$\n$a\npreesc$}esc",
+    "out" : "${$\n$a\npreesc$}esc"
+  }, {
+    "in" : "a$${$aselfzza:b$",
+    "out" : "a$${$aselfzza:b$"
+  }, {
+    "in" : "zz\nzzself}${selfzzref",
+    "out" : "zz\nzzself}${selfzzref"
+  }, {
+    "in" : "$$${escx",
+    "out" : "$$${escx"
+  }, {
+    "in" : "a${ref$}ad",
+    "err" : "Cannot resolve variable 'ref$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${:-{a",
+    "out" : "${:-{a"
+  }, {
+    "in" : "refxbdoldolaesc${dolpreesc:-{",
+    "out" : "refxbdoldolaesc${dolpreesc:-{"
+  }, {
+    "in" : "esc$esc${",
+    "out" : "esc$esc${"
+  }, {
+    "in" : "x{$${x$",
+    "out" : "x{$${x$"
+  }, {
+    "in" : "prepre:-ref${self\na}desc",
+    "err" : "Cannot resolve variable 'self\na' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "esc}selfzz${$d}selfx::-{",
+    "err" : "Cannot resolve variable '$d' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "selfxdol\n$$\npreselfref${}",
+    "out" : "selfxdol\n$$\npreselfrefE"
+  }, {
+    "in" : "{{{}predolref:$$dola${",
+    "out" : "{{{}predolref:$$dola${"
+  }, {
+    "in" : "dol:-$x\naescxzz}}${",
+    "out" : "dol:-$x\naescxzz}}${"
+  }, {
+    "in" : "dol${:$dol:ref}a::esc{",
+    "err" : "Cannot resolve variable ':$dol:ref' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "pre${$addol:-}esc:a",
+    "out" : "preesc:a"
+  }, {
+    "in" : "\n${dol{\nzzapred{ref",
+    "out" : "\n${dol{\nzzapred{ref"
+  }, {
+    "in" : ":-:-${dolzz$dselfpreaself",
+    "out" : ":-:-${dolzz$dselfpreaself"
+  }, {
+    "in" : "ref\nxdol$${}",
+    "out" : "ref\nxdol${}"
+  }, {
+    "in" : "b${esczzdol",
+    "out" : "b${esczzdol"
+  }, {
+    "in" : "${a$$",
+    "out" : "${a$$"
+  }, {
+    "in" : ":doldol$${b\n{",
+    "out" : ":doldol$${b\n{"
+  }, {
+    "in" : "refx:self{zz${$zzzz",
+    "out" : "refx:self{zz${$zzzz"
+  }, {
+    "in" : "pre${$esca$b:ax",
+    "out" : "pre${$esca$b:ax"
+  }, {
+    "in" : "x\npreref$:\npre}brefd${",
+    "out" : "x\npreref$:\npre}brefd${"
+  }, {
+    "in" : "}{selfselfa${preself\n:",
+    "out" : "}{selfselfa${preself\n:"
+  }, {
+    "in" : "besca${:-x{",
+    "out" : "besca${:-x{"
+  }, {
+    "in" : "self${aesc{\n",
+    "out" : "self${aesc{\n"
+  }, {
+    "in" : "doldol{x:preescpreb:-ref${:",
+    "out" : "doldol{x:preescpreb:-ref${:"
+  }, {
+    "in" : "zzprex${zz",
+    "out" : "zzprex${zz"
+  }, {
+    "in" : "dol${:-:-\n",
+    "out" : "dol${:-:-\n"
+  }, {
+    "in" : "${dolpre$$self",
+    "out" : "${dolpre$$self"
+  }, {
+    "in" : "bx\n:-self}${refadaa",
+    "out" : "bx\n:-self}${refadaa"
+  }, {
+    "in" : ":-x}$b}$x:-dol${$",
+    "out" : ":-x}$b}$x:-dol${$"
+  }, {
+    "in" : "selfesc$a$ddol$doldol${a",
+    "out" : "selfesc$a$ddol$doldol${a"
+  }, {
+    "in" : "$${d:-ref{$selfzzrefx:",
+    "out" : "$${d:-ref{$selfzzrefx:"
+  }, {
+    "in" : "selfzzzzx{:$badd:-${",
+    "out" : "selfzzzzx{:$badd:-${"
+  }, {
+    "in" : "b${{zzesc$}\npreesca",
+    "err" : "Cannot resolve variable '{zzesc$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$$b\n\n{:-\n${$$",
+    "out" : "$$b\n\n{:-\n${$$"
+  }, {
+    "in" : ":-dolx{a${$b$selfx",
+    "out" : ":-dolx{a${$b$selfx"
+  }, {
+    "in" : ":-${zz${$bref$$prea",
+    "out" : ":-${zz${$bref$$prea"
+  }, {
+    "in" : "xprebself\nself{refa${$:}",
+    "err" : "Cannot resolve variable '$:' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "x$x${$ref",
+    "out" : "x$x${$ref"
+  }, {
+    "in" : "pre$\naa${",
+    "out" : "pre$\naa${"
+  }, {
+    "in" : "ddol${ref\n$a\n",
+    "out" : "ddol${ref\n$a\n"
+  }, {
+    "in" : ":-dolescdselfba${b:pre",
+    "out" : ":-dolescdselfba${b:pre"
+  }, {
+    "in" : "escescesc${dol{prexarefzzzz",
+    "out" : "escescesc${dol{prexarefzzzz"
+  }, {
+    "in" : "{a:predolesc{b\n{${preesc",
+    "out" : "{a:predolesc{b\n{${preesc"
+  }, {
+    "in" : "zz\ndol$escprebself${x:-$zz",
+    "out" : "zz\ndol$escprebself${x:-$zz"
+  }, {
+    "in" : "dzzref}zz:-a\n$:-${$dol",
+    "out" : "dzzref}zz:-a\n$:-${$dol"
+  }, {
+    "in" : "x${",
+    "out" : "x${"
+  }, {
+    "in" : "}b{${axself$$}{",
+    "err" : "Cannot resolve variable 'axself$$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "bselfx${zz:$:pre:-$$",
+    "out" : "bselfx${zz:$:pre:-$$"
+  }, {
+    "in" : "xx${\n$:bx",
+    "out" : "xx${\n$:bx"
+  }, {
+    "in" : "${a}selfself\ndol",
+    "out" : "Aselfself\ndol"
+  }, {
+    "in" : "${dol$xself\na",
+    "out" : "${dol$xself\na"
+  }, {
+    "in" : "b${$self:escescapre",
+    "out" : "b${$self:escescapre"
+  }, {
+    "in" : ":dolref{refaselfdol${",
+    "out" : ":dolref{refaselfdol${"
+  }, {
+    "in" : "zz${selfself:-ref:-{:-}aselfpre",
+    "out" : "zzref:-{:-aselfpre"
+  }, {
+    "in" : "dolb{$::${xdola:-b",
+    "out" : "dolb{$::${xdola:-b"
+  }, {
+    "in" : "pre:xd:-d${:-esc{$",
+    "out" : "pre:xd:-d${:-esc{$"
+  }, {
+    "in" : "apreescrefd:-$${prezz",
+    "out" : "apreescrefd:-$${prezz"
+  }, {
+    "in" : "selfdol:-d${\ndoldol{$a:",
+    "out" : "selfdol:-d${\ndoldol{$a:"
+  }, {
+    "in" : ":${:}prexref:-::",
+    "err" : "Cannot resolve variable ':' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "}$$x:\nd${$}",
+    "err" : "Cannot resolve variable '$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : ":-{\nesc:\n$d\n${\nx",
+    "out" : ":-{\nesc:\n$d\n${\nx"
+  }, {
+    "in" : "\n${$prebddol$\n\nb}",
+    "err" : "Cannot resolve variable '$prebddol$\n\nb' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "{d$refzz${",
+    "out" : "{d$refzz${"
+  }, {
+    "in" : "esc${selfd:-}",
+    "out" : "esc"
+  }, {
+    "in" : "selfzzxxb{esc${dol\n",
+    "out" : "selfzzxxb{esc${dol\n"
+  }, {
+    "in" : "$refdol:-a${",
+    "out" : "$refdol:-a${"
+  }, {
+    "in" : "dselfesc${zzselfrefxescref:zz",
+    "out" : "dselfesc${zzselfrefxescref:zz"
+  }, {
+    "in" : "b:-zz:-${b",
+    "out" : "b:-zz:-${b"
+  }, {
+    "in" : "pre{${$pre{a}x",
+    "err" : "Cannot resolve variable '$pre{a' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${$ref:prea",
+    "out" : "${$ref:prea"
+  }, {
+    "in" : "$:-$zz${",
+    "out" : "$:-$zz${"
+  }, {
+    "in" : "ref{:-:self:xbzzdol${ref$",
+    "out" : "ref{:-:self:xbzzdol${ref$"
+  }, {
+    "in" : "escpreb$${dol:-\n",
+    "out" : "escpreb$${dol:-\n"
+  }, {
+    "in" : ":ad${${zzref$bself",
+    "out" : ":ad${${zzref$bself"
+  }, {
+    "in" : "selfxa{ref::-self$self$zz${",
+    "out" : "selfxa{ref::-self$self$zz${"
+  }, {
+    "in" : "dol\nb${bdol$prezzx}{dol",
+    "err" : "Cannot resolve variable 'bdol$prezzx' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "pre${:pre}ref$preb$$}",
+    "err" : "Cannot resolve variable ':pre' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "zza{zz:-${dolzz:zz",
+    "out" : "zza{zz:-${dolzz:zz"
+  }, {
+    "in" : "a:-prezz${:zz}descbzz",
+    "err" : "Cannot resolve variable ':zz' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "escxa$\nx:dpre\n${\n",
+    "out" : "escxa$\nx:dpre\n${\n"
+  }, {
+    "in" : "${selfrefzza",
+    "out" : "${selfrefzza"
+  }, {
+    "in" : "a}${selfdolxb",
+    "out" : "a}${selfdolxb"
+  }, {
+    "in" : "$$xx${",
+    "out" : "$$xx${"
+  }, {
+    "in" : "d{${$$selfx}d}prearef",
+    "err" : "Cannot resolve variable '$$selfx' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "x:-${$:{predolrefpre",
+    "out" : "x:-${$:{predolrefpre"
+  }, {
+    "in" : "zz\nesca$\n\n${self{:",
+    "out" : "zz\nesca$\n\n${self{:"
+  }, {
+    "in" : "escxpre${d$zz",
+    "out" : "escxpre${d$zz"
+  }, {
+    "in" : "${pre:-predolself:-}zzaesc$",
+    "out" : "${zzaesc$"
+  }, {
+    "in" : "b$zza$apre\n$b${",
+    "out" : "b$zza$apre\n$b${"
+  }, {
+    "in" : "${selfa",
+    "out" : "${selfa"
+  }, {
+    "in" : "}self${refzz",
+    "out" : "}self${refzz"
+  }, {
+    "in" : "${zzesc$d",
+    "out" : "${zzesc$d"
+  }, {
+    "in" : "apre$\n:-preself}${$a$:-",
+    "out" : "apre$\n:-preself}${$a$:-"
+  }, {
+    "in" : "${b:zz$$$$selfxb$self",
+    "out" : "${b:zz$$$$selfxb$self"
+  }, {
+    "in" : ":selfdbrefdol:-d\n$b${",
+    "out" : ":selfdbrefdol:-d\n$b${"
+  }, {
+    "in" : "dolref:zz:-dref${",
+    "out" : "dolref:zz:-dref${"
+  }, {
+    "in" : "$\nddol$dolselfbdolrefself${",
+    "out" : "$\nddol$dolselfbdolrefself${"
+  }, {
+    "in" : "zz$${}:$dol}",
+    "out" : "zz${}:$dol}"
+  }, {
+    "in" : "prepre$dolselfxdxzzdol{zz${",
+    "out" : "prepre$dolselfxdxzzdol{zz${"
+  }, {
+    "in" : "$esc{selfzzself\n:${",
+    "out" : "$esc{selfzzself\n:${"
+  }, {
+    "in" : "selfzz\nx${dola\n}d$",
+    "err" : "Cannot resolve variable 'dola\n' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${esc}$zz\nddol:-selfarefdol",
+    "out" : "${a}$zz\nddol:-selfarefdol"
+  }, {
+    "in" : "esc${:-dolddol",
+    "out" : "esc${:-dolddol"
+  }, {
+    "in" : "a\n{\n${::-\npredol",
+    "out" : "a\n{\n${::-\npredol"
+  }, {
+    "in" : "${:$refprepre$zzx:-\nprex",
+    "out" : "${:$refprepre$zzx:-\nprex"
+  }, {
+    "in" : "pre\nescbx$${",
+    "out" : "pre\nescbx$${"
+  }, {
+    "in" : "{zzdol{self$desc\nref${",
+    "out" : "{zzdol{self$desc\nref${"
+  }, {
+    "in" : "dol:-refa${xda",
+    "out" : "dol:-refa${xda"
+  }, {
+    "in" : "ref$:b${",
+    "out" : "ref$:b${"
+  }, {
+    "in" : "\n:-:-pre$self${:zzselfdzz$",
+    "out" : "\n:-:-pre$self${:zzselfdzz$"
+  }, {
+    "in" : "selfxrefself:-:-${\nself",
+    "out" : "selfxrefself:-:-${\nself"
+  }, {
+    "in" : "zz$:::-escd${}esc}a",
+    "out" : "zz$:::-escdEesc}a"
+  }, {
+    "in" : "${{\n",
+    "out" : "${{\n"
+  }, {
+    "in" : "{aself${$refa:-:{self",
+    "out" : "{aself${$refa:-:{self"
+  }, {
+    "in" : "}xx\nesc${\n",
+    "out" : "}xx\nesc${\n"
+  }, {
+    "in" : "$$${}x$\n",
+    "out" : "$${}x$\n"
+  }, {
+    "in" : ":-doldol${a::-d$zzesc",
+    "out" : ":-doldol${a::-d$zzesc"
+  }, {
+    "in" : "\n${{\nrefadold",
+    "out" : "\n${{\nrefadold"
+  }, {
+    "in" : "dol${a:-{esc$:-bselfx$",
+    "out" : "dol${a:-{esc$:-bselfx$"
+  }, {
+    "in" : "escselfrefref:-}:$ref:${${",
+    "out" : "escselfrefref:-}:$ref:${${"
+  }, {
+    "in" : "escdprepreddol${:bb:-refb",
+    "out" : "escdprepreddol${:bb:-refb"
+  }, {
+    "in" : "adescesczz${azz",
+    "out" : "adescesczz${azz"
+  }, {
+    "in" : "{{$zzbb${",
+    "out" : "{{$zzbb${"
+  }, {
+    "in" : "::-ref${b{$dol:-escescesc",
+    "out" : "::-ref${b{$dol:-escescesc"
+  }, {
+    "in" : "${b$$selfxescdola\nzz",
+    "out" : "${b$$selfxescdola\nzz"
+  }, {
+    "in" : "a${d$xx}self",
+    "err" : "Cannot resolve variable 'd$xx' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "xaselfbpre${",
+    "out" : "xaselfbpre${"
+  }, {
+    "in" : "x$dolxdol${$pre",
+    "out" : "x$dolxdol${$pre"
+  }, {
+    "in" : "x$:esc${pre",
+    "out" : "x$:esc${pre"
+  }, {
+    "in" : "$x${b{pre$pre$}a",
+    "err" : "Cannot resolve variable 'b{pre$pre$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : ":-${refb$dadpre$:-",
+    "out" : ":-${refb$dadpre$:-"
+  }, {
+    "in" : "a::-:self${ref:esc$",
+    "out" : "a::-:self${ref:esc$"
+  }, {
+    "in" : "{:-\n${:${$esc",
+    "out" : "{:-\n${:${$esc"
+  }, {
+    "in" : "\nselfescpreazz${esc:{dolb",
+    "out" : "\nselfescpreazz${esc:{dolb"
+  }, {
+    "in" : "${$x\n}\n",
+    "err" : "Cannot resolve variable '$x\n' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "escprea{zzb${:-$$zz:-esc",
+    "out" : "escprea{zzb${:-$$zz:-esc"
+  }, {
+    "in" : "{ref:-${d{ref",
+    "out" : "{ref:-${d{ref"
+  }, {
+    "in" : "pre\nbselfzz$${selfaself",
+    "out" : "pre\nbselfzz$${selfaself"
+  }, {
+    "in" : "prezzdol$x${",
+    "out" : "prezzdol$x${"
+  }, {
+    "in" : "zzx$bself${}:-",
+    "out" : "zzx$bselfE:-"
+  }, {
+    "in" : "ad:ref${}xzza:ref:-$",
+    "out" : "ad:refExzza:ref:-$"
+  }, {
+    "in" : "${::",
+    "out" : "${::"
+  }, {
+    "in" : "dolddself${{$dolxrefpreaesc",
+    "out" : "dolddself${{$dolxrefpreaesc"
+  }, {
+    "in" : "${dpre",
+    "out" : "${dpre"
+  }, {
+    "in" : ":-a$\n:-${escbdol:-",
+    "out" : ":-a$\n:-${escbdol:-"
+  }, {
+    "in" : "xdselfprerefselfbdolesczzselfref${",
+    "out" : "xdselfprerefselfbdolesczzselfref${"
+  }, {
+    "in" : "a$pre$$${ab$:-\n",
+    "out" : "a$pre$$${ab$:-\n"
+  }, {
+    "in" : ":-$${",
+    "out" : ":-$${"
+  }, {
+    "in" : "predolrefx:-escd:-${dpre",
+    "out" : "predolrefx:-escd:-${dpre"
+  }, {
+    "in" : "$$refself${esca$esc:-:-",
+    "out" : "$$refself${esca$esc:-:-"
+  }, {
+    "in" : "}escx${zz:-prepreself",
+    "out" : "}escx${zz:-prepreself"
+  }, {
+    "in" : "$bselfesc${pre",
+    "out" : "$bselfesc${pre"
+  }, {
+    "in" : "ref$\n${}$dol",
+    "out" : "ref$\nE$dol"
+  }, {
+    "in" : "prex${selfd:}",
+    "err" : "Cannot resolve variable 'selfd:' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${{::x\n{${",
+    "out" : "${{::x\n{${"
+  }, {
+    "in" : ":-${:-esc:-a",
+    "out" : ":-${:-esc:-a"
+  }, {
+    "in" : ":-{${adb$pre{",
+    "out" : ":-{${adb$pre{"
+  }, {
+    "in" : "ref}escdol${esczz",
+    "out" : "ref}escdol${esczz"
+  }, {
+    "in" : "bdol${{{\ndol$selfescdpred",
+    "out" : "bdol${{{\ndol$selfescdpred"
+  }, {
+    "in" : "${zz:-pre",
+    "out" : "${zz:-pre"
+  }, {
+    "in" : "self{preprerefesc${",
+    "out" : "self{preprerefesc${"
+  }, {
+    "in" : "dselfpre${descself",
+    "out" : "dselfpre${descself"
+  }, {
+    "in" : ":-${ref$refpre$\nxref:-",
+    "out" : ":-${ref$refpre$\nxref:-"
+  }, {
+    "in" : "b$esczz${$",
+    "out" : "b$esczz${$"
+  }, {
+    "in" : "$$${{$preaxada{",
+    "out" : "$$${{$preaxada{"
+  }, {
+    "in" : ":dol${x{xselfbescpre$dpre",
+    "out" : ":dol${x{xselfbescpre$dpre"
+  }, {
+    "in" : "d}:${a$$}}",
+    "err" : "Cannot resolve variable 'a$$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : ":-ba$esc${{\nzzesc\n",
+    "out" : ":-ba$esc${{\nzzesc\n"
+  }, {
+    "in" : "xxx::-escdb${xesczz}",
+    "err" : "Cannot resolve variable 'xesczz' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "\nazzescselfrefx${",
+    "out" : "\nazzescselfrefx${"
+  }, {
+    "in" : "{pre${x:-zzdolescpreselfself",
+    "out" : "{pre${x:-zzdolescpreselfself"
+  }, {
+    "in" : "$}refx$${dol\n",
+    "out" : "$}refx$${dol\n"
+  }, {
+    "in" : "{selfescdola\na${$dol$db",
+    "out" : "{selfescdola\na${$dol$db"
+  }, {
+    "in" : "$:-${}esc$b${${xa",
+    "out" : "$:-Eesc$b${${xa"
+  }, {
+    "in" : "}}${zza}:-escbaesc{",
+    "err" : "Cannot resolve variable 'zza' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$:-ref$a${{refselfa\n$:",
+    "out" : "$:-ref$a${{refselfa\n$:"
+  }, {
+    "in" : "$:-$${d",
+    "out" : "$:-$${d"
+  }, {
+    "in" : ":-\na{\nzz:-{${zzdol",
+    "out" : ":-\na{\nzz:-{${zzdol"
+  }, {
+    "in" : "\nb\nescrefzzesc${{dpre}",
+    "err" : "Cannot resolve variable '{dpre' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "refrefadoldol:$\nzz:${a",
+    "out" : "refrefadoldol:$\nzz:${a"
+  }, {
+    "in" : "}:-{$dol\n\n$${:-",
+    "out" : "}:-{$dol\n\n$${:-"
+  }, {
+    "in" : "${dolxaref",
+    "out" : "${dolxaref"
+  }, {
+    "in" : "a:-adolb$x\n{x${bx",
+    "out" : "a:-adolb$x\n{x${bx"
+  }, {
+    "in" : "dolesc$:-zz$${zzesc:-$",
+    "out" : "dolesc$:-zz$${zzesc:-$"
+  }, {
+    "in" : "\nx{zzselfpre$${refxpre\n",
+    "out" : "\nx{zzselfpre$${refxpre\n"
+  }, {
+    "in" : "${escb$$zzxbselfself:-refd",
+    "out" : "${escb$$zzxbselfself:-refd"
+  }, {
+    "in" : "zz$b${",
+    "out" : "zz$b${"
+  }, {
+    "in" : ":$${$ref",
+    "out" : ":$${$ref"
+  }, {
+    "in" : "dolselfxrefself{:a${{::-",
+    "out" : "dolselfxrefself{:a${{::-"
+  }, {
+    "in" : "azz:${escaesc",
+    "out" : "azz:${escaesc"
+  }, {
+    "in" : "${::-:$d:{d$dol",
+    "out" : "${::-:$d:{d$dol"
+  }, {
+    "in" : "b${doldxref",
+    "out" : "b${doldxref"
+  }, {
+    "in" : "refx$${dola:escrefpreesc$",
+    "out" : "refx$${dola:escrefpreesc$"
+  }, {
+    "in" : "}b:-dol${pre:zz\n:prezz$",
+    "out" : "}b:-dol${pre:zz\n:prezz$"
+  }, {
+    "in" : "${besczz",
+    "out" : "${besczz"
+  }, {
+    "in" : "selfd:-selfesc${esc}}escpreesc",
+    "out" : "selfd:-selfesc${a}}escpreesc"
+  }, {
+    "in" : "${\n$$",
+    "out" : "${\n$$"
+  }, {
+    "in" : "}prearefesc:-$${{:ref",
+    "out" : "}prearefesc:-$${{:ref"
+  }, {
+    "in" : "${refbdol}",
+    "err" : "Cannot resolve variable 'refbdol' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "dol\nself$a${$pre",
+    "out" : "dol\nself$a${$pre"
+  }, {
+    "in" : "prepreesca${}a",
+    "out" : "prepreescaEa"
+  }, {
+    "in" : "aesc}esc}}${}pred$b",
+    "out" : "aesc}esc}}Epred$b"
+  }, {
+    "in" : "dd}ref${zzd:$}escselfb",
+    "err" : "Cannot resolve variable 'zzd:$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "{x:${{}\n$:zz",
+    "err" : "Cannot resolve variable '{' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "dold}:-${$esc$dol",
+    "out" : "dold}:-${$esc$dol"
+  }, {
+    "in" : ":dolpre${{{",
+    "out" : ":dolpre${{{"
+  }, {
+    "in" : "ref:prex:-${{",
+    "out" : "ref:prex:-${{"
+  }, {
+    "in" : "xescd\n$\nb{${preselfdb",
+    "out" : "xescd\n$\nb{${preselfdb"
+  }, {
+    "in" : "zzaesc${",
+    "out" : "zzaesc${"
+  }, {
+    "in" : "baescself:-${ref",
+    "out" : "baescself:-${ref"
+  }, {
+    "in" : "b}$dzz\n{dol${self$",
+    "out" : "b}$dzz\n{dol${self$"
+  }, {
+    "in" : "$ref${d",
+    "out" : "$ref${d"
+  }, {
+    "in" : "$self\n{bdola${bx",
+    "out" : "$self\n{bdola${bx"
+  }, {
+    "in" : "${zzxzz}dx:-esc$",
+    "err" : "Cannot resolve variable 'zzxzz' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${drefzz{esc$:-:",
+    "out" : "${drefzz{esc$:-:"
+  }, {
+    "in" : "{b{\npre}${:-dol\n",
+    "out" : "{b{\npre}${:-dol\n"
+  }, {
+    "in" : "{refd${:$}b$$pre",
+    "err" : "Cannot resolve variable ':$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "}dol}dol${\n${dol:",
+    "out" : "}dol}dol${\n${dol:"
+  }, {
+    "in" : ":prezz${$pre}$zz{\n:-\n",
+    "err" : "Cannot resolve variable '$pre' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "refzz}escbref${:pre\n",
+    "out" : "refzz}escbref${:pre\n"
+  }, {
+    "in" : "}:-${",
+    "out" : "}:-${"
+  }, {
+    "in" : "xpre${{{zz",
+    "out" : "xpre${{{zz"
+  }, {
+    "in" : ":-a}{${escselfzzdzzab",
+    "out" : ":-a}{${escselfzzdzzab"
+  }, {
+    "in" : "self$zzxesc{$:$a${",
+    "out" : "self$zzxesc{$:$a${"
+  }, {
+    "in" : "xbbb${}:",
+    "out" : "xbbbE:"
+  }, {
+    "in" : ":{d{${:prezz",
+    "out" : ":{d{${:prezz"
+  }, {
+    "in" : ":$d$d${}zzd",
+    "out" : ":$d$dEzzd"
+  }, {
+    "in" : "}}pre${:}:$a",
+    "err" : "Cannot resolve variable ':' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "refb$escddolx}$x${",
+    "out" : "refb$escddolx}$x${"
+  }, {
+    "in" : "$dolbrefadb:-ab${",
+    "out" : "$dolbrefadb:-ab${"
+  }, {
+    "in" : "{zzdola${x{ref:$self$",
+    "out" : "{zzdola${x{ref:$self$"
+  }, {
+    "in" : "zz:-dzzpre{a{d$${",
+    "out" : "zz:-dzzpre{a{d$${"
+  }, {
+    "in" : "b${prezz$\n}:",
+    "err" : "Cannot resolve variable 'prezz$\n' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "::-esc{dol\n$\n${",
+    "out" : "::-esc{dol\n$\n${"
+  }, {
+    "in" : "}}xself:$self${ref{",
+    "out" : "}}xself:$self${ref{"
+  }, {
+    "in" : "bselfb$$${:",
+    "out" : "bselfb$$${:"
+  }, {
+    "in" : "$${self\nescbb:\nesca:-",
+    "out" : "$${self\nescbb:\nesca:-"
+  }, {
+    "in" : "ref{${a$selfescselfzzxescx",
+    "out" : "ref{${a$selfescselfzzxescx"
+  }, {
+    "in" : "ref${refb$",
+    "out" : "ref${refb$"
+  }, {
+    "in" : "pre${::-d$",
+    "out" : "pre${::-d$"
+  }, {
+    "in" : "$b$x$$refd}a${self$",
+    "out" : "$b$x$$refd}a${self$"
+  }, {
+    "in" : "zzdescpred\nrefzz$dol${",
+    "out" : "zzdescpred\nrefzz$dol${"
+  }, {
+    "in" : "$zz${$refref",
+    "out" : "$zz${$refref"
+  }, {
+    "in" : "${\npre\nrefx}zzx",
+    "err" : "Cannot resolve variable '\npre\nrefx' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "d${ref:preaescesc",
+    "out" : "d${ref:preaescesc"
+  }, {
+    "in" : "esc${dolesc:-:",
+    "out" : "esc${dolesc:-:"
+  }, {
+    "in" : ":refzzd\na${xad:-",
+    "out" : ":refzzd\na${xad:-"
+  }, {
+    "in" : ":-ref:${refb:-refd",
+    "out" : ":-ref:${refb:-refd"
+  }, {
+    "in" : "prex${}ref:\ndoldolx$",
+    "out" : "prexEref:\ndoldolx$"
+  }, {
+    "in" : ":bdescref}$escself${self",
+    "out" : ":bdescref}$escself${self"
+  }, {
+    "in" : "ref$\n${self$\n:-ref\nself}d",
+    "out" : "ref$\nref\nselfd"
+  }, {
+    "in" : "preself:-d${dol{",
+    "out" : "preself:-d${dol{"
+  }, {
+    "in" : "$pre\n$\n}${\nesc",
+    "out" : "$pre\n$\n}${\nesc"
+  }, {
+    "in" : "escdpre\n:zz:-xpre:${::",
+    "out" : "escdpre\n:zz:-xpre:${::"
+  }, {
+    "in" : "b$self:desc${\n",
+    "out" : "b$self:desc${\n"
+  }, {
+    "in" : "aref${preescesc",
+    "out" : "aref${preescesc"
+  }, {
+    "in" : "a}ax${}aref{:\n",
+    "out" : "a}axEaref{:\n"
+  }, {
+    "in" : ":-$${zzadref{}xesc{d",
+    "out" : ":-${zzadref{}xesc{d"
+  }, {
+    "in" : ":-b${da$esc:-ref:",
+    "out" : ":-b${da$esc:-ref:"
+  }, {
+    "in" : "\n}prea:-${\n$prezz",
+    "out" : "\n}prea:-${\n$prezz"
+  }, {
+    "in" : "${:xpreself",
+    "out" : "${:xpreself"
+  }, {
+    "in" : "${{:selfb",
+    "out" : "${{:selfb"
+  }, {
+    "in" : "bzzrefx${dol}$besc",
+    "out" : "bzzrefx$$besc"
+  }, {
+    "in" : "ref${}x:zzxrefa:-dol",
+    "out" : "refEx:zzxrefa:-dol"
+  }, {
+    "in" : ":-self}x:selfescx{zz$${a",
+    "out" : ":-self}x:selfescx{zz$${a"
+  }, {
+    "in" : "esc{dpreref:-$${:-",
+    "out" : "esc{dpreref:-$${:-"
+  }, {
+    "in" : "self\n$:-dol$${escdolref$self\n",
+    "out" : "self\n$:-dol$${escdolref$self\n"
+  }, {
+    "in" : "a$\n\nref${dol",
+    "out" : "a$\n\nref${dol"
+  }, {
+    "in" : "selfzz$d}selfrefxx${",
+    "out" : "selfzz$d}selfrefxx${"
+  }, {
+    "in" : "$}ax:${:-{zzzz",
+    "out" : "$}ax:${:-{zzzz"
+  }, {
+    "in" : "preescesc:{pre::-d${escself",
+    "out" : "preescesc:{pre::-d${escself"
+  }, {
+    "in" : "self${}\nazz}",
+    "out" : "selfE\nazz}"
+  }, {
+    "in" : "$esc$${$zz}",
+    "out" : "$esc${$zz}"
+  }, {
+    "in" : "refref${esczz\n",
+    "out" : "refref${esczz\n"
+  }, {
+    "in" : "\n\n\nself${$b}:-$esc:\n",
+    "err" : "Cannot resolve variable '$b' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "{b$adolb:-${aselfxesca",
+    "out" : "{b$adolb:-${aselfxesca"
+  }, {
+    "in" : "dolbzzprex}b${$a",
+    "out" : "dolbzzprex}b${$a"
+  }, {
+    "in" : "self::::\n$xzzzz${ref",
+    "out" : "self::::\n$xzzzz${ref"
+  }, {
+    "in" : "bself}$:-bpreesc{${bpre:-",
+    "out" : "bself}$:-bpreesc{${bpre:-"
+  }, {
+    "in" : "preb${escescazz$x:-a",
+    "out" : "preb${escescazz$x:-a"
+  }, {
+    "in" : "${a:}",
+    "out" : "colon"
+  }, {
+    "in" : "preesca${x",
+    "out" : "preesca${x"
+  }, {
+    "in" : "{b}$dold${{{preb\n}",
+    "err" : "Cannot resolve variable '{{preb\n' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "\n:${zz",
+    "out" : "\n:${zz"
+  }, {
+    "in" : "ref$self${}dolb$$}esc{pre",
+    "out" : "ref$selfEdolb$$}esc{pre"
+  }, {
+    "in" : "refselfx:-a:${",
+    "out" : "refselfx:-a:${"
+  }, {
+    "in" : "prezzxb${\n",
+    "out" : "prezzxb${\n"
+  }, {
+    "in" : "aself{:-x}}zz${$pred",
+    "out" : "aself{:-x}}zz${$pred"
+  }, {
+    "in" : "refzzd{prezz${\n\n\n",
+    "out" : "refzzd{prezz${\n\n\n"
+  }, {
+    "in" : ":\n$escx$xxself${a{",
+    "out" : ":\n$escx$xxself${a{"
+  }, {
+    "in" : "zz:-:-xdol${:esc",
+    "out" : "zz:-:-xdol${:esc"
+  }, {
+    "in" : ":-:${:zz}",
+    "err" : "Cannot resolve variable ':zz' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$$pre${:-:-zzrefxesc\n",
+    "out" : "$$pre${:-:-zzrefxesc\n"
+  }, {
+    "in" : "zzb$refrefa\nesc${dpre",
+    "out" : "zzb$refrefa\nesc${dpre"
+  }, {
+    "in" : "${{",
+    "out" : "${{"
+  }, {
+    "in" : "${$zz}b:-:bzzdx",
+    "err" : "Cannot resolve variable '$zz' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "}prex{zz${dol$:-",
+    "out" : "}prex{zz${dol$:-"
+  }, {
+    "in" : "${$pre$pre\npre}",
+    "err" : "Cannot resolve variable '$pre$pre\npre' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$${zz:}ref}zzbselfesc",
+    "out" : "${zz:}ref}zzbselfesc"
+  }, {
+    "in" : "bb${a:refd$",
+    "out" : "bb${a:refd$"
+  }, {
+    "in" : "$d${$:-}xselfref",
+    "out" : "$dxselfref"
+  }, {
+    "in" : "$pre:${esc:-$escescxdol\n$",
+    "out" : "$pre:${esc:-$escescxdol\n$"
+  }, {
+    "in" : "${bself:-d$refrefselfzz",
+    "out" : "${bself:-d$refrefselfzz"
+  }, {
+    "in" : "${esc{:xselfb\nx$",
+    "out" : "${esc{:xselfb\nx$"
+  }, {
+    "in" : ":${}$\nxxesc",
+    "out" : ":E$\nxxesc"
+  }, {
+    "in" : "${a$d}{zza$d:-",
+    "err" : "Cannot resolve variable 'a$d' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "}selfzzdselfapre\n:-${prea}",
+    "err" : "Cannot resolve variable 'prea' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "d}{ddol$${dbzz",
+    "out" : "d}{ddol$${dbzz"
+  }, {
+    "in" : "\npre${a{dolabref}a",
+    "err" : "Cannot resolve variable 'a{dolabref' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "zzpre${:",
+    "out" : "zzpre${:"
+  }, {
+    "in" : "{${predol{x",
+    "out" : "{${predol{x"
+  }, {
+    "in" : "${}daa",
+    "out" : "Edaa"
+  }, {
+    "in" : "${dol\nxzz",
+    "out" : "${dol\nxzz"
+  }, {
+    "in" : "${aself{::d$",
+    "out" : "${aself{::d$"
+  }, {
+    "in" : "}d:a${prerefdol:-a",
+    "out" : "}d:a${prerefdol:-a"
+  }, {
+    "in" : "$b$${$axselfzz\n$\n:-",
+    "out" : "$b$${$axselfzz\n$\n:-"
+  }, {
+    "in" : "$dol{${d",
+    "out" : "$dol{${d"
+  }, {
+    "in" : "${$esc$}$$selfzza",
+    "err" : "Cannot resolve variable '$esc$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$$dold\nzz${bzz",
+    "out" : "$$dold\nzz${bzz"
+  }, {
+    "in" : "zzesc:escdzzesc${$pre:{$",
+    "out" : "zzesc:escdzzesc${$pre:{$"
+  }, {
+    "in" : "selfesc${",
+    "out" : "selfesc${"
+  }, {
+    "in" : "dol{ref${zzpredolselfdzzd",
+    "out" : "dol{ref${zzpredolselfdzzd"
+  }, {
+    "in" : "xa${esc:-axdol}selfx",
+    "out" : "xa${a}selfx"
+  }, {
+    "in" : "${selfesc$xd:-dolself",
+    "out" : "${selfesc$xd:-dolself"
+  }, {
+    "in" : "b${a{:-d:$zz:-",
+    "out" : "b${a{:-d:$zz:-"
+  }, {
+    "in" : "self}esc:${\nzzaxa",
+    "out" : "self}esc:${\nzzaxa"
+  }, {
+    "in" : ":-${adolba$escrefbescd$",
+    "out" : ":-${adolba$escrefbescd$"
+  }, {
+    "in" : "xdol${$dol\nzzescescdol",
+    "out" : "xdol${$dol\nzzescescdol"
+  }, {
+    "in" : "d${self}prepre\n$:-:-",
+    "err" : "Infinite loop in property interpolation of ${self}p: self"
+  }, {
+    "in" : "$escpre$esc\nref${\n",
+    "out" : "$escpre$esc\nref${\n"
+  }, {
+    "in" : "bself:-:-{b${escselfd",
+    "out" : "bself:-:-{b${escselfd"
+  }, {
+    "in" : "preselfzz{ref${b:-}x:-",
+    "out" : "preselfzz{refBx:-"
+  }, {
+    "in" : ":-${selfzz}db$${aself",
+    "err" : "Cannot resolve variable 'selfzz' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "${zz{aa:-{selfa$x",
+    "out" : "${zz{aa:-{selfa$x"
+  }, {
+    "in" : "${pre{pre$xdolbzzself}a",
+    "err" : "Cannot resolve variable 'pre{pre$xdolbzzself' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "dol:$a\nselfself:${escpre",
+    "out" : "dol:$a\nselfself:${escpre"
+  }, {
+    "in" : "${esc$dol",
+    "out" : "${esc$dol"
+  }, {
+    "in" : "xescbdd:-dolescref${aref",
+    "out" : "xescbdd:-dolescref${aref"
+  }, {
+    "in" : "\n\n:x${$a$",
+    "out" : "\n\n:x${$a$"
+  }, {
+    "in" : "${:-refzza:-zzrefref{$",
+    "out" : "${:-refzza:-zzrefref{$"
+  }, {
+    "in" : "${$zz:}:}:-self",
+    "err" : "Cannot resolve variable '$zz:' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "ad${:xzz",
+    "out" : "ad${:xzz"
+  }, {
+    "in" : "${preesc\n",
+    "out" : "${preesc\n"
+  }, {
+    "in" : "$\nb}dolself\n:-x${ref:{",
+    "out" : "$\nb}dolself\n:-x${ref:{"
+  }, {
+    "in" : "$selfrefzzx:-a:zzescprex${",
+    "out" : "$selfrefzzx:-a:zzescprex${"
+  }, {
+    "in" : "dzza:-bpre::-${self:-",
+    "out" : "dzza:-bpre::-${self:-"
+  }, {
+    "in" : ":-}${dolref{}bbdref$}",
+    "err" : "Cannot resolve variable 'dolref{' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "{selfref$${$",
+    "out" : "{selfref$${$"
+  }, {
+    "in" : "}:::-bdolb$$${x",
+    "out" : "}:::-bdolb$$${x"
+  }, {
+    "in" : "a\n:$selfa$::ab${b",
+    "out" : "a\n:$selfa$::ab${b"
+  }, {
+    "in" : "ad\n$ref:${${refpre",
+    "out" : "ad\n$ref:${${refpre"
+  }, {
+    "in" : "refref${aself$\npre",
+    "out" : "refref${aself$\npre"
+  }, {
+    "in" : "dol${$",
+    "out" : "dol${$"
+  }, {
+    "in" : ":dselfx${bpredzz$x",
+    "out" : ":dselfx${bpredzz$x"
+  }, {
+    "in" : "self:dol$:}${zz}",
+    "err" : "Cannot resolve variable 'zz' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "zzdoldpredol$:a::${\n",
+    "out" : "zzdoldpredol$:a::${\n"
+  }, {
+    "in" : "$dol:a${$\nd$ref",
+    "out" : "$dol:a${$\nd$ref"
+  }, {
+    "in" : ":d${x:",
+    "out" : ":d${x:"
+  }, {
+    "in" : "${dbdpreself$:",
+    "out" : "${dbdpreself$:"
+  }, {
+    "in" : "zzd$${\nb\nbddolselfpre",
+    "out" : "zzd$${\nb\nbddolselfpre"
+  }, {
+    "in" : "preref}${pre",
+    "out" : "preref}${pre"
+  }, {
+    "in" : ":selfesc}escdoldol${prezzb",
+    "out" : ":selfesc}escdoldol${prezzb"
+  }, {
+    "in" : "escxdx${b",
+    "out" : "escxdx${b"
+  }, {
+    "in" : "b:zzd\nselfdol}${{",
+    "out" : "b:zzd\nselfdol}${{"
+  }, {
+    "in" : ":-\nself:-:-\n}predol$${a",
+    "out" : ":-\nself:-:-\n}predol$${a"
+  }, {
+    "in" : "dolself${dol}ref",
+    "out" : "dolself$ref"
+  }, {
+    "in" : "${{{pre",
+    "out" : "${{{pre"
+  }, {
+    "in" : "zz$pre\n${:-zzdolselfx",
+    "out" : "zz$pre\n${:-zzdolselfx"
+  }, {
+    "in" : "zz$${$:baself",
+    "out" : "zz$${$:baself"
+  }, {
+    "in" : "dzzd:${{$$zz",
+    "out" : "dzzd:${{$$zz"
+  }, {
+    "in" : "${$esczzref",
+    "out" : "${$esczzref"
+  }, {
+    "in" : "${refref\n:-}x}bdolpred{",
+    "out" : "x}bdolpred{"
+  }, {
+    "in" : "}dold${:-",
+    "out" : "}dold${:-"
+  }, {
+    "in" : "${x:-:xarefrefzzselfescselfdol",
+    "out" : "${x:-:xarefrefzzselfescselfdol"
+  }, {
+    "in" : "dol${}}bself{:-dol",
+    "out" : "dolE}bself{:-dol"
+  }, {
+    "in" : "a$zzd:-${bprexdolzz",
+    "out" : "a$zzd:-${bprexdolzz"
+  }, {
+    "in" : "besc$${:-prepre$x$zz",
+    "out" : "besc$${:-prepre$x$zz"
+  }, {
+    "in" : "esc${\npre$$esczz",
+    "out" : "esc${\npre$$esczz"
+  }, {
+    "in" : "dzzzzprerefdol${\nself",
+    "out" : "dzzzzprerefdol${\nself"
+  }, {
+    "in" : "prebx$doldol$\nab${}self",
+    "out" : "prebx$doldol$\nabEself"
+  }, {
+    "in" : "}}dbdolpre${self",
+    "out" : "}}dbdolpre${self"
+  }, {
+    "in" : "ref:bxrefd}refdolesc$${dol",
+    "out" : "ref:bxrefd}refdolesc$${dol"
+  }, {
+    "in" : "a${doldol:-",
+    "out" : "a${doldol:-"
+  }, {
+    "in" : "zz${x{esc}",
+    "err" : "Cannot resolve variable 'x{esc' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "pre$xesc${\nself{esc",
+    "out" : "pre$xesc${\nself{esc"
+  }, {
+    "in" : "$:-$bzzpreescbesc:refself${",
+    "out" : "$:-$bzzpreescbesc:refself${"
+  }, {
+    "in" : ":esc\ndol:${",
+    "out" : ":esc\ndol:${"
+  }, {
+    "in" : "$zzd${",
+    "out" : "$zzd${"
+  }, {
+    "in" : "refd${refbprezzaselfrefdol",
+    "out" : "refd${refbprezzaselfrefdol"
+  }, {
+    "in" : "}ref${$\nselfa{{ref}dolb",
+    "err" : "Cannot resolve variable '$\nselfa{{ref' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$${prexesc",
+    "out" : "$${prexesc"
+  }, {
+    "in" : "pre}${:d",
+    "out" : "pre}${:d"
+  }, {
+    "in" : "zzpredolref:-self$}${dd",
+    "out" : "zzpredolref:-self$}${dd"
+  }, {
+    "in" : "x}x:}\na$$b${\n:-",
+    "out" : "x}x:}\na$$b${\n:-"
+  }, {
+    "in" : "ad${",
+    "out" : "ad${"
+  }, {
+    "in" : "b}${xdol:-aesc{{{",
+    "out" : "b}${xdol:-aesc{{{"
+  }, {
+    "in" : "\n}$:b${",
+    "out" : "\n}$:b${"
+  }, {
+    "in" : "}zzesc${escdpre{b",
+    "out" : "}zzesc${escdpre{b"
+  }, {
+    "in" : "$${:{\n$}zzref:-",
+    "out" : "${:{\n$}zzref:-"
+  }, {
+    "in" : "${:-a:$dol$xref:-zzd",
+    "out" : "${:-a:$dol$xref:-zzd"
+  }, {
+    "in" : "zza${x$",
+    "out" : "zza${x$"
+  }, {
+    "in" : "$refpreesc\nbself$${",
+    "out" : "$refpreesc\nbself$${"
+  }, {
+    "in" : "{ref${\n",
+    "out" : "{ref${\n"
+  }, {
+    "in" : "ref$dol}${zzx",
+    "out" : "ref$dol}${zzx"
+  }, {
+    "in" : "dol${x:dolselfref:",
+    "out" : "dol${x:dolselfref:"
+  }, {
+    "in" : "$${$$\n",
+    "out" : "$${$$\n"
+  }, {
+    "in" : "refref}\n}b$esc${dolaesc:",
+    "out" : "refref}\n}b$esc${dolaesc:"
+  }, {
+    "in" : "$zzzzx${descpre\nbddol",
+    "out" : "$zzzzx${descpre\nbddol"
+  }, {
+    "in" : ":dolref}}${esczzescselfzz:",
+    "out" : ":dolref}}${esczzescselfzz:"
+  }, {
+    "in" : "b:-:-:drefxself${besc:-\n",
+    "out" : "b:-:-:drefxself${besc:-\n"
+  }, {
+    "in" : "zzesc:zzescx}dolzzrefb${",
+    "out" : "zzesc:zzescx}dolzzrefb${"
+  }, {
+    "in" : "prezzxdself}$ref:-$esc${esc",
+    "out" : "prezzxdself}$ref:-$esc${esc"
+  }, {
+    "in" : "pred{zz${}$:-esc",
+    "out" : "pred{zzE$:-esc"
+  }, {
+    "in" : ":-esc\n::-dself$${",
+    "out" : ":-esc\n::-dself$${"
+  }, {
+    "in" : "{${{pre",
+    "out" : "{${{pre"
+  }, {
+    "in" : "ref{${zz$self$self:-x",
+    "out" : "ref{${zz$self$self:-x"
+  }, {
+    "in" : ":-:$$${\na",
+    "out" : ":-:$$${\na"
+  }, {
+    "in" : "a:{zzxx${pre",
+    "out" : "a:{zzxx${pre"
+  }, {
+    "in" : "${:-$$refpre{$$",
+    "out" : "${:-$$refpre{$$"
+  }, {
+    "in" : "zzprea${dzzb",
+    "out" : "zzprea${dzzb"
+  }, {
+    "in" : "${xzz:-ab}{{$",
+    "out" : "ab{{$"
+  }, {
+    "in" : "${x",
+    "out" : "${x"
+  }, {
+    "in" : "prea}zza:-d${",
+    "out" : "prea}zza:-d${"
+  }, {
+    "in" : ":$selfesc:-{${{}x",
+    "err" : "Cannot resolve variable '{' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "b:-self${ref$esc:-{zzdoldolself",
+    "out" : "b:-self${ref$esc:-{zzdoldolself"
+  }, {
+    "in" : "esca$$zza${\nd",
+    "out" : "esca$$zza${\nd"
+  }, {
+    "in" : ":prepre:${doldol}}prezz$",
+    "err" : "Cannot resolve variable 'doldol' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "d}${bdol$\ndol",
+    "out" : "d}${bdol$\ndol"
+  }, {
+    "in" : ":zz${a",
+    "out" : ":zz${a"
+  }, {
+    "in" : "ref}${$xdola",
+    "out" : "ref}${$xdola"
+  }, {
+    "in" : ":-doldol}dol\n${",
+    "out" : ":-doldol}dol\n${"
+  }, {
+    "in" : "selfdol$:b:zz{\nesc${self",
+    "out" : "selfdol$:b:zz{\nesc${self"
+  }, {
+    "in" : "a${\nselfbrefxx",
+    "out" : "a${\nselfbrefxx"
+  }, {
+    "in" : "{:${doldd:",
+    "out" : "{:${doldd:"
+  }, {
+    "in" : "self}{escdolpre:dol${",
+    "out" : "self}{escdolpre:dol${"
+  }, {
+    "in" : ":-{esc${preprex:-",
+    "out" : ":-{esc${preprex:-"
+  }, {
+    "in" : "\n\n${$dolself}x$zzescpre",
+    "err" : "Cannot resolve variable '$dolself' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$${d{",
+    "out" : "$${d{"
+  }, {
+    "in" : "aa\n:-descbesc${dol$\nself",
+    "out" : "aa\n:-descbesc${dol$\nself"
+  }, {
+    "in" : "{pre${xx{escref",
+    "out" : "{pre${xx{escref"
+  }, {
+    "in" : "predself\nself${:self}b",
+    "err" : "Cannot resolve variable ':self' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "}preselfescx${}selfzz:-dol",
+    "out" : "}preselfescxEselfzz:-dol"
+  }, {
+    "in" : "dol{x${pre:$\n{\npre",
+    "out" : "dol{x${pre:$\n{\npre"
+  }, {
+    "in" : "dddescrefa$self${$zzd:-",
+    "out" : "dddescrefa$self${$zzd:-"
+  }, {
+    "in" : "$refdazza${",
+    "out" : "$refdazza${"
+  }, {
+    "in" : "selfzzself{{selfdol:-selfdol${bdol",
+    "out" : "selfzzself{{selfdol:-selfdol${bdol"
+  }, {
+    "in" : "dol:-pre${:-x$esc",
+    "out" : "dol:-pre${:-x$esc"
+  }, {
+    "in" : "dref$esc${$escx",
+    "out" : "dref$esc${$escx"
+  }, {
+    "in" : ":-${\nxselfx\ndol",
+    "out" : ":-${\nxselfx\ndol"
+  }, {
+    "in" : "self\n:-${:bzz$",
+    "out" : "self\n:-${:bzz$"
+  }, {
+    "in" : "esc$${$refdolesc",
+    "out" : "esc$${$refdolesc"
+  }, {
+    "in" : "self::${:{xb",
+    "out" : "self::${:{xb"
+  }, {
+    "in" : "self{${",
+    "out" : "self{${"
+  }, {
+    "in" : "{zz:-ref$$dol${self{x$}",
+    "err" : "Cannot resolve variable 'self{x$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "esc:-b:${::-a:-\n\n",
+    "out" : "esc:-b:${::-a:-\n\n"
+  }, {
+    "in" : "d\nzz\npredolself:-dol${a:",
+    "out" : "d\nzz\npredolself:-dol${a:"
+  }, {
+    "in" : "dol$ref}${selfdol:-\n:-",
+    "out" : "dol$ref}${selfdol:-\n:-"
+  }, {
+    "in" : ":-:-zz$\na{a}azz{${",
+    "out" : ":-:-zz$\na{a}azz{${"
+  }, {
+    "in" : "}pre$:-${",
+    "out" : "}pre$:-${"
+  }, {
+    "in" : ":ref:$${xzzrefselfdpre",
+    "out" : ":ref:$${xzzrefselfdpre"
+  }, {
+    "in" : "ad$\nself:-xa${dol\n",
+    "out" : "ad$\nself:-xa${dol\n"
+  }, {
+    "in" : "${\n${:-x",
+    "out" : "${\n${:-x"
+  }, {
+    "in" : "refdolzzrefref${",
+    "out" : "refdolzzrefref${"
+  }, {
+    "in" : ":$pre}{ref${",
+    "out" : ":$pre}{ref${"
+  }, {
+    "in" : "dolescselfzz$doldolxesc${ref",
+    "out" : "dolescselfzz$doldolxesc${ref"
+  }, {
+    "in" : "zzd${self",
+    "out" : "zzd${self"
+  }, {
+    "in" : "\nref:-${pre\n}{b$ref{",
+    "err" : "Cannot resolve variable 'pre\n' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "$aa${}:",
+    "out" : "$aaE:"
+  }, {
+    "in" : ":$$${b{$}:$:-",
+    "out" : ":$${b{$}:$:-"
+  }, {
+    "in" : "bselfprea{$$b${}",
+    "out" : "bselfprea{$$bE"
+  }, {
+    "in" : "preref:{${",
+    "out" : "preref:{${"
+  }, {
+    "in" : "$d${a:\ndolesc:-",
+    "out" : "$d${a:\ndolesc:-"
+  }, {
+    "in" : "${zzref:-dselfrefdescesc:d:",
+    "out" : "${zzref:-dselfrefdescesc:d:"
+  }, {
+    "in" : "$${besczzda",
+    "out" : "$${besczzda"
+  }, {
+    "in" : "\nselfaself{:-dol$${x",
+    "out" : "\nselfaself{:-dol$${x"
+  }, {
+    "in" : "${$d$",
+    "out" : "${$d$"
+  }, {
+    "in" : "$${zzzz",
+    "out" : "$${zzzz"
+  }, {
+    "in" : ":-:-a}self${a:-}",
+    "out" : ":-:-a}selfA"
+  }, {
+    "in" : ":ddol${refesc",
+    "out" : ":ddol${refesc"
+  }, {
+    "in" : "${x:d:-selfazzx",
+    "out" : "${x:d:-selfazzx"
+  }, {
+    "in" : "\npreb:-self${ref",
+    "out" : "\npreb:-self${ref"
+  }, {
+    "in" : "}d{$x$$}$}${",
+    "out" : "}d{$x$$}$}${"
+  }, {
+    "in" : "x{selfescescb{}$${ddol",
+    "out" : "x{selfescescb{}$${ddol"
+  }, {
+    "in" : "b$dol:-aself$$:-${azz",
+    "out" : "b$dol:-aself$$:-${azz"
+  }, {
+    "in" : "a$$${:{self",
+    "out" : "a$$${:{self"
+  }, {
+    "in" : "dbescbdolpre${x",
+    "out" : "dbescbdolpre${x"
+  }, {
+    "in" : "${:selfrefxd$zzx",
+    "out" : "${:selfrefxd$zzx"
+  }, {
+    "in" : ":-xdolzzb${xpredselfesc",
+    "out" : ":-xdolzzb${xpredselfesc"
+  }, {
+    "in" : "b:-${pre{:predolescpreesc\nzz",
+    "out" : "b:-${pre{:predolescpreesc\nzz"
+  }, {
+    "in" : "d${${d:self",
+    "out" : "d${${d:self"
+  }, {
+    "in" : "pre${{x",
+    "out" : "pre${{x"
+  }, {
+    "in" : "dolpredolself}$dol${",
+    "out" : "dolpredolself}$dol${"
+  }, {
+    "in" : ":-ref:zz:${\nbdolxselfdol:-",
+    "out" : ":-ref:zz:${\nbdolxselfdol:-"
+  }, {
+    "in" : "zz:$bescprezzpredbbzz${",
+    "out" : "zz:$bescprezzpredbbzz${"
+  }, {
+    "in" : "zzdolself${xa:prepre",
+    "out" : "zzdolself${xa:prepre"
+  }, {
+    "in" : "$dol:$$selfescprezz${",
+    "out" : "$dol:$$selfescprezz${"
+  }, {
+    "in" : "$refref${dolbbdolzzref",
+    "out" : "$refref${dolbbdolzzref"
+  }, {
+    "in" : "{${d$esc}$x",
+    "err" : "Cannot resolve variable 'd$esc' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "d${\n:",
+    "out" : "d${\n:"
+  }, {
+    "in" : "x$\n:-${$zz:self",
+    "out" : "x$\n:-${$zz:self"
+  }, {
+    "in" : "bself\n$${dzzdx$a$",
+    "out" : "bself\n$${dzzdx$a$"
+  }, {
+    "in" : "pre:axself:-self${:-",
+    "out" : "pre:axself:-self${:-"
+  }, {
+    "in" : "prezz}d${b{aescself:-",
+    "out" : "prezz}d${b{aescself:-"
+  }, {
+    "in" : "${:-b{escesc{$esc}{:a",
+    "out" : "E{:a"
+  }, {
+    "in" : "x${\ndolzzpre:",
+    "out" : "x${\ndolzzpre:"
+  }, {
+    "in" : "aaadselfref${self\ndolprex{",
+    "out" : "aaadselfref${self\ndolprex{"
+  }, {
+    "in" : "$d$zzrefselfxa$ref${",
+    "out" : "$d$zzrefselfxa$ref${"
+  }, {
+    "in" : "${self$self{ddol:ref",
+    "out" : "${self$self{ddol:ref"
+  }, {
+    "in" : "}{escrefbaescself${x{",
+    "out" : "}{escrefbaescself${x{"
+  }, {
+    "in" : "dol\n${d{selfaax",
+    "out" : "dol\n${d{selfaax"
+  }, {
+    "in" : "${selfd",
+    "out" : "${selfd"
+  }, {
+    "in" : "dol$}preselfxpre$a$:-${a",
+    "out" : "dol$}preselfxpre$a$:-${a"
+  }, {
+    "in" : ":-\n$:${a\n:-selfself",
+    "out" : ":-\n$:${a\n:-selfself"
+  }, {
+    "in" : "dol:${axd",
+    "out" : "dol:${axd"
+  }, {
+    "in" : "$d{${pre$zz:-",
+    "out" : "$d{${pre$zz:-"
+  }, {
+    "in" : "\n{bref${$:zz$xself",
+    "out" : "\n{bref${$:zz$xself"
+  }, {
+    "in" : "}ref${$xpredol",
+    "out" : "}ref${$xpredol"
+  }, {
+    "in" : "preesc}${xzz{}",
+    "err" : "Cannot resolve variable 'xzz{' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "b${bdol\n{",
+    "out" : "b${bdol\n{"
+  }, {
+    "in" : ":-escpreref:-{\nxzzrefdol$${",
+    "out" : ":-escpreref:-{\nxzzrefdol$${"
+  }, {
+    "in" : "db{\n$esca{refzz${",
+    "out" : "db{\n$esca{refzz${"
+  }, {
+    "in" : "${{$d$a\nzzescdol{",
+    "out" : "${{$d$a\nzzescdol{"
+  }, {
+    "in" : "$$selfself\nesc\nselfd:-}${self",
+    "out" : "$$selfself\nesc\nselfd:-}${self"
+  }, {
+    "in" : "zz${:-aref:-",
+    "out" : "zz${:-aref:-"
+  }, {
+    "in" : "selfdoldolazz${$",
+    "out" : "selfdoldolazz${$"
+  }, {
+    "in" : "${\nzzdolself$esc:\n",
+    "out" : "${\nzzdolself$esc:\n"
+  }, {
+    "in" : "b${{{xxx",
+    "out" : "b${{{xxx"
+  }, {
+    "in" : "ax{${$",
+    "out" : "ax{${$"
+  }, {
+    "in" : "esc$${${",
+    "out" : "esc$${${"
+  }, {
+    "in" : "zzref${xref{",
+    "out" : "zzref${xref{"
+  }, {
+    "in" : "pre${a{preself\nref{selfdx",
+    "out" : "pre${a{preself\nref{selfdx"
+  }, {
+    "in" : "{dolrefselfa:-\npredref${escref",
+    "out" : "{dolrefselfa:-\npredref${escref"
+  }, {
+    "in" : "$${$$\nselfd",
+    "out" : "$${$$\nselfd"
+  }, {
+    "in" : "ref${prerefdol\ndol{\nself",
+    "out" : "ref${prerefdol\ndol{\nself"
+  }, {
+    "in" : "arefdol${:-prex\nref\n{$",
+    "out" : "arefdol${:-prex\nref\n{$"
+  }, {
+    "in" : "${xself:dref:-{:-dolb",
+    "out" : "${xself:dref:-{:-dolb"
+  }, {
+    "in" : "${:-{",
+    "out" : "${:-{"
+  }, {
+    "in" : "zz\n${a$aescselfdselfpredola",
+    "out" : "zz\n${a$aescselfdselfpredola"
+  }, {
+    "in" : "${$escself",
+    "out" : "${$escself"
+  }, {
+    "in" : ":-$}${self:-\npre{$",
+    "out" : ":-$}${self:-\npre{$"
+  }, {
+    "in" : "$ad}$${refself}",
+    "out" : "$ad}${refself}"
+  }, {
+    "in" : "zz:-${$ad:",
+    "out" : "zz:-${$ad:"
+  }, {
+    "in" : "zz${apreaescpreselfxdol{bref",
+    "out" : "zz${apreaescpreselfxdol{bref"
+  }, {
+    "in" : "{desc::-$${selfbrefesc",
+    "out" : "{desc::-$${selfbrefesc"
+  }, {
+    "in" : "escb$selfdol\na:${",
+    "out" : "escb$selfdol\na:${"
+  }, {
+    "in" : "}dolselfrefdol${:-$ref$",
+    "out" : "}dolselfrefdol${:-$ref$"
+  }, {
+    "in" : "${zzpreadref",
+    "out" : "${zzpreadref"
+  }, {
+    "in" : "x$${\naescrefx",
+    "out" : "x$${\naescrefx"
+  }, {
+    "in" : "d:${b:-\n:-xdprea",
+    "out" : "d:${b:-\n:-xdprea"
+  }, {
+    "in" : ":pre${b}}:-:-$:zzb",
+    "out" : ":preB}:-:-$:zzb"
+  }, {
+    "in" : "$}bzzdol${{:",
+    "out" : "$}bzzdol${{:"
+  }, {
+    "in" : "dolref${zz$",
+    "out" : "dolref${zz$"
+  }, {
+    "in" : "xescaself${d$esc",
+    "out" : "xescaself${d$esc"
+  }, {
+    "in" : "${escdolref:predolselfbdol",
+    "out" : "${escdolref:predolselfbdol"
+  }, {
+    "in" : "\nselfselfesc${b",
+    "out" : "\nselfselfesc${b"
+  }, {
+    "in" : "$d${:xarefself",
+    "out" : "$d${:xarefself"
+  }, {
+    "in" : "doldolpreprex{b}${ref\n}a",
+    "err" : "Cannot resolve variable 'ref\n' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "ref$dbzzx${${zz",
+    "out" : "ref$dbzzx${${zz"
+  }, {
+    "in" : "zz{zz${$self",
+    "out" : "zz{zz${$self"
+  }, {
+    "in" : "}$refzz${",
+    "out" : "}$refzz${"
+  }, {
+    "in" : "}${{dolescdba:-}",
+    "out" : "}"
+  }, {
+    "in" : "zz${$a}{:-b",
+    "err" : "Cannot resolve variable '$a' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "a{xpre\nself${a\nprezz}",
+    "err" : "Cannot resolve variable 'a\nprezz' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "self:zz${ref$bdesc{zzb",
+    "out" : "self:zz${ref$bdesc{zzb"
+  }, {
+    "in" : "$self{${bescref\nself",
+    "out" : "$self{${bescref\nself"
+  }, {
+    "in" : "desc$bxref}ref${ref",
+    "out" : "desc$bxref}ref${ref"
+  }, {
+    "in" : "aaref${}{esc",
+    "out" : "aarefE{esc"
+  }, {
+    "in" : "${escdolpre",
+    "out" : "${escdolpre"
+  }, {
+    "in" : ":-:dol${$x$}:-self:-:x",
+    "err" : "Cannot resolve variable '$x$' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "\nadol${",
+    "out" : "\nadol${"
+  }, {
+    "in" : ":dolref${{self\n",
+    "out" : ":dolref${{self\n"
+  }, {
+    "in" : "escescdol$pre${:-selfself:",
+    "out" : "escescdol$pre${:-selfself:"
+  }, {
+    "in" : "$$${d:-",
+    "out" : "$$${d:-"
+  }, {
+    "in" : "x\n:{\ndolb$pre${b\n$",
+    "out" : "x\n:{\ndolb$pre${b\n$"
+  }, {
+    "in" : "aref$doldolref$${:$selfref",
+    "out" : "aref$doldolref$${:$selfref"
+  }, {
+    "in" : "a$b}{$:-zz\ndol$${dol",
+    "out" : "a$b}{$:-zz\ndol$${dol"
+  }, {
+    "in" : "${dolself:",
+    "out" : "${dolself:"
+  }, {
+    "in" : "$xbescpreescdol${",
+    "out" : "$xbescpreescdol${"
+  }, {
+    "in" : "{selfdolb:-:-${{b:-esc",
+    "out" : "{selfdolb:-:-${{b:-esc"
+  }, {
+    "in" : "esc:\n${dd",
+    "out" : "esc:\n${dd"
+  }, {
+    "in" : "$prerefdolesc$${zz:d",
+    "out" : "$prerefdolesc$${zz:d"
+  }, {
+    "in" : "refdd$${",
+    "out" : "refdd$${"
+  }, {
+    "in" : "$}$}ddolzz:-${$pre",
+    "out" : "$}$}ddolzz:-${$pre"
+  }, {
+    "in" : "pre{${{",
+    "out" : "pre{${{"
+  }, {
+    "in" : "dol$${refself$",
+    "out" : "dol$${refself$"
+  }, {
+    "in" : "x\nab}refddol\n${",
+    "out" : "x\nab}refddol\n${"
+  }, {
+    "in" : "${b$zzref",
+    "out" : "${b$zzref"
+  }, {
+    "in" : "d:-:-${a:-xd}zz",
+    "out" : "d:-:-Azz"
+  }, {
+    "in" : "::$self{}x${",
+    "out" : "::$self{}x${"
+  }, {
+    "in" : "}predx${dol{bx:prex",
+    "out" : "}predx${dol{bx:prex"
+  }, {
+    "in" : "$refb${xselfpre$dolxb",
+    "out" : "$refb${xselfpre$dolxb"
+  }, {
+    "in" : "${esc}$dolpre",
+    "out" : "${a}$dolpre"
+  }, {
+    "in" : "ref}ref:-xd$\nxself${zz",
+    "out" : "ref}ref:-xd$\nxself${zz"
+  }, {
+    "in" : "${selfref",
+    "out" : "${selfref"
+  }, {
+    "in" : "}$}}bselfbref$pre:-:-${",
+    "out" : "}$}}bselfbref$pre:-:-${"
+  }, {
+    "in" : "refdbdolref${",
+    "out" : "refdbdolref${"
+  }, {
+    "in" : "pre${$zz",
+    "out" : "pre${$zz"
+  }, {
+    "in" : "zz\n$${self$d\npreref{$a",
+    "out" : "zz\n$${self$d\npreref{$a"
+  }, {
+    "in" : "esc${xb\na\n",
+    "out" : "esc${xb\na\n"
+  }, {
+    "in" : "${$${}$pre",
+    "err" : "Cannot resolve variable '$${' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "{$${prexx::pred",
+    "out" : "{$${prexx::pred"
+  }, {
+    "in" : "ddol${}selfzz{x:-}zz$dol",
+    "out" : "ddolEselfzz{x:-}zz$dol"
+  }, {
+    "in" : "dxpre\nzzdoldol${$:-dol:-esc",
+    "out" : "dxpre\nzzdoldol${$:-dol:-esc"
+  }, {
+    "in" : "dabdolzzselfd}${arefapre",
+    "out" : "dabdolzzselfd}${arefapre"
+  }, {
+    "in" : "a}${besc$:-esc",
+    "out" : "a}${besc$:-esc"
+  }, {
+    "in" : "zz\nab$:-${a",
+    "out" : "zz\nab$:-${a"
+  }, {
+    "in" : "ref:}}${escselfself",
+    "out" : "ref:}}${escselfself"
+  }, {
+    "in" : "a{:${",
+    "out" : "a{:${"
+  }, {
+    "in" : "xada:-:-${}d",
+    "out" : "xada:-:-Ed"
+  }, {
+    "in" : ":${x:-aescdolx{d",
+    "out" : ":${x:-aescdolx{d"
+  }, {
+    "in" : "aself{refbpreesc:-:${{self",
+    "out" : "aself{refbpreesc:-:${{self"
+  }, {
+    "in" : ":ref:bzz:-${axbdoldol",
+    "out" : ":ref:bzz:-${axbdoldol"
+  }, {
+    "in" : "${a\nescd\nref{pre",
+    "out" : "${a\nescd\nref{pre"
+  }, {
+    "in" : "x:{dol${}${escprex}",
+    "err" : "Cannot resolve variable 'escprex' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "pre:-b{${{self:\n:",
+    "out" : "pre:-b{${{self:\n:"
+  }, {
+    "in" : "$dself}zzesc$dol}${:-{esc",
+    "out" : "$dself}zzesc$dol}${:-{esc"
+  }, {
+    "in" : "x}zz:-$azz${$",
+    "out" : "x}zz:-$azz${$"
+  }, {
+    "in" : "d${zzselfesc",
+    "out" : "d${zzselfesc"
+  }, {
+    "in" : "xxx}${}:-\na",
+    "out" : "xxx}E:-\na"
+  }, {
+    "in" : "$pre}$xself:zz${pre",
+    "out" : "$pre}$xself:zz${pre"
+  }, {
+    "in" : "\n$dol$esc{d\ndolself${",
+    "out" : "\n$dol$esc{d\ndolself${"
+  }, {
+    "in" : "{{dol:{dd${dolzz",
+    "out" : "{{dol:{dd${dolzz"
+  }, {
+    "in" : "ref${doldolxesczz",
+    "out" : "ref${doldolxesczz"
+  }, {
+    "in" : "${brefselfprerefa}",
+    "err" : "Cannot resolve variable 'brefselfprerefa' (enableSubstitutionInVariables=false)."
+  }, {
+    "in" : "apreb:-a${arefx\nb$:-",
+    "out" : "apreb:-a${arefx\nb$:-"
+  }, {
+    "in" : "{a$${bselfdol",
+    "out" : "{a$${bselfdol"
+  }, {
+    "in" : "self${zzrefpreescref$dselfdolself",
+    "out" : "self${zzrefpreescref$dselfdolself"
+  } ]
+}
