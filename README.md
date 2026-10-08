@@ -58,14 +58,22 @@ gib build --target=my-registry.example.com/my-app:latest
 ### Build to a tar file
 
 ```sh
-gib build --target=tar://my-image.tar
+gib build --target=tar://my-image.tar --name=my-app:latest
 ```
 
-The tar is both an OCI image layout and a `docker save` archive, the way
-Docker's own `save` writes one: every blob once under `blobs/sha256/`,
-the image's manifest among them with its exact bytes, `index.json` naming
-it and `manifest.json` naming its config and layers. `docker load` reads
-it, and `gib push` pushes the very manifest the build wrote.
+As Jib writes it, a Docker-format image's tarball is a `docker save`
+archive naming the image by every tag, and an OCI-format image's is an
+OCI image layout, the manifest among its blobs with its exact bytes.
+`docker load` reads either, and `gib push` pushes the very manifest the
+build wrote.
+
+### Load into the Docker daemon
+
+```sh
+gib build --target=docker://my-app:latest
+```
+
+The image is loaded into the Docker daemon `DOCKER_HOST` names, as `docker load` would load it.
 
 ### Push an image tarball
 
@@ -94,9 +102,7 @@ written with; only the tag is new.
 The reference names a tag; one naming a digest is refused, the digest
 being the tarball's. A tarball holding several tagged images is pushed
 only when exactly one of them is tagged in the reference's repository.
-Credentials resolve as for `gib build`: `--to-username`/`--to-password`,
-then `--username`/`--password`, then `--to-credential-helper` or
-`--credential-helper`, then the Docker config (`~/.docker/config.json`).
+Credentials resolve as for `gib build`.
 
 ### Minimal `jib.yaml`
 
@@ -120,20 +126,39 @@ layers:
 ## CLI Reference
 
 ```
-gib build --target <image> [options]
+gib build --target <image> [options] [@<argfile>...]
 ```
+
+`gib build` takes the options of `jib build`, and refuses what it
+refuses: a command line Jib rejects exits 2, a build that fails exits
+1. The container settings of `jib jar` and `jib war` (`--entrypoint`
+and the like) belong in the build file. One option is gib's own:
+`--from` builds on another base image than the build file names, such
+as a tarball a sandboxed build is handed in place of a registry pull.
 
 | Option | Description |
 |---|---|
-| `-t, --target` | **(required)** Target image reference or `tar://<path>` |
-| `-b, --build-file` | Build file path (default: `jib.yaml`) |
+| `-t, --target` | **(required)** Target image: a reference, `registry://<ref>`, `docker://<ref>` or `tar://<path>` |
+| `--name` | The image's name in a tarball (required with `tar://`) |
+| `--from` | The base image, in place of the build file's `from.image` (gib only) |
+| `-b, --build-file` | Build file path (default: `<context>/jib.yaml`) |
 | `-c, --context` | Build context directory (default: `.`) |
-| `-p, --parameter` | Template parameter `key=value` (repeatable) |
-| `--from` | Override base image |
-| `--image-format` | `Docker` or `OCI` (default: `Docker`) |
-| `--additional-tags` | Extra tags for registry targets |
-| `--credential-helper` | Docker credential helper suffix |
-| `--username / --password` | Registry credentials |
+| `-p, --parameter` | Template parameter `name=value` (repeatable) |
+| `--additional-tags` | Extra tags, comma separated (repeatable) |
+| `--credential-helper` | A credential helper: its path, or the suffix of `docker-credential-<suffix>` |
+| `--username / --password` | Credentials for both registries; `--password` alone prompts for it |
+| `--to-*`, `--from-*` | The same, for the target or the base image registry alone |
+| `--allow-insecure-registries` | Reach a registry without TLS verification, then over HTTP |
+| `--send-credentials-over-http` | Send credentials over plain HTTP |
+| `--image-metadata-out` | Write the image's digest, ID and tags to a JSON file |
+| `--verbosity` | `quiet`, `error`, `warn`, `lifecycle` (default), `info` or `debug` |
+| `--console` | `auto` (default), `rich` or `plain` |
+
+Without credentials given, they are found where Jib finds them: Podman's
+`auth.json`, Docker's `config.json` (its credential helpers too),
+`docker-credential-gcr` for `gcr.io` and `docker-credential-ecr-login`
+for `amazonaws.com`, and Google's Application Default Credentials.
+Registry mirrors are read from Jib's global `config.json`.
 
 Run `gib build --help` for the full list of options.
 
@@ -144,9 +169,9 @@ gib push <tarball> <reference> [options]
 | Option | Description |
 |---|---|
 | `--to-username / --to-password` | Target registry credentials |
-| `--to-credential-helper` | Target Docker credential helper suffix |
+| `--to-credential-helper` | Target registry credential helper |
 | `--username / --password`, `--credential-helper` | Fallbacks for the above |
-| `--allow-insecure-registries` | Allow HTTP registries |
+| `--allow-insecure-registries` | Reach a registry without TLS verification, then over HTTP |
 
 ## Go Library
 
@@ -169,7 +194,7 @@ Or build from an existing `jib.yaml`:
 ```go
 spec, _ := buildfile.Parse("jib.yaml", nil)
 builder, _ := buildfile.Convert(spec, ".", nil)
-result, _ := builder.Containerize(ctx, gib.ToTar("image.tar"))
+result, _ := builder.Containerize(ctx, gib.ToTar("image.tar", gib.WithTarImageName("app")))
 ```
 
 ## License

@@ -44,7 +44,7 @@ func pushed(t *testing.T, ref string) v1.Hash {
 
 func push(t *testing.T, tarPath, ref string) (*Container, error) {
 	t.Helper()
-	return ToRegistry(ref).Push(context.Background(), tarPath)
+	return ToRegistry(ref, WithAllowInsecureRegistries(true)).Push(context.Background(), tarPath)
 }
 
 func ociImage(t *testing.T, arch string) v1.Image {

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"time"
+	"unicode"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
@@ -35,6 +36,7 @@ type ContainerBuilder struct {
 	format           ImageFormat
 	platforms        []Platform
 	progressCallback ProgressCallback
+	log              LogHandler
 	err              error
 }
 
@@ -161,17 +163,54 @@ func (b *ContainerBuilder) emitProgress(phase ProgressPhase, message string) {
 	}
 }
 
+// OnLog sets what receives the build's log messages, as Jib's
+// LogEvents: what WithLogHandler sets on the target when unset.
+func (b *ContainerBuilder) OnLog(h LogHandler) *ContainerBuilder {
+	b.log = h
+	return b
+}
+
+// ConfigureBaseImage applies opts to a registry base image.
+func (b *ContainerBuilder) ConfigureBaseImage(opts ...ImageSourceOption) *ContainerBuilder {
+	if s, ok := b.source.(*registrySource); ok {
+		for _, opt := range opts {
+			opt(s)
+		}
+	}
+	return b
+}
+
 // Containerize builds the image and writes it to the given target.
 func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containerizer) (*Container, error) {
 	if b.err != nil {
 		return nil, b.err
 	}
+	if target.settings.log == nil {
+		target.settings.log = b.log
+	}
+	log := target.settings.log
+	if err := target.Validate(); err != nil {
+		return nil, err
+	}
+	if err := b.source.check(); err != nil {
+		return nil, err
+	}
 
 	b.emitProgress(PhaseContainerizing, fmt.Sprintf("Containerizing application to %s...", target.Description()))
+	log.log(LevelInfo, "Containerizing application with the following files:")
+	for _, l := range b.layers {
+		if len(l.Entries) == 0 {
+			continue
+		}
+		log.log(LevelInfo, "\t%s:", capitalize(l.Name))
+		for _, e := range l.Entries {
+			log.log(LevelInfo, "\t\t%s", e.SourcePath)
+		}
+	}
 
 	b.emitProgress(PhasePullingBase, fmt.Sprintf("Pulling base image %s...", b.source.description()))
 
-	bases, err := b.source.resolve(ctx, b.targetPlatforms())
+	bases, err := b.source.resolve(ctx, b.targetPlatforms(), target.settings)
 	if err != nil {
 		return nil, &BuildError{Message: "failed to resolve base image", Cause: err}
 	}
@@ -185,6 +224,7 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 			continue
 		}
 		b.emitProgress(PhaseBuildingLayer, fmt.Sprintf("Building layer %s...", fel.Name))
+		log.log(LevelProgress, "Building %s layer...", fel.Name)
 		// Convert FileEntry -> layer.Entry
 		entries := make([]layer.Entry, len(fel.Entries))
 		for i, e := range fel.Entries {
@@ -240,6 +280,9 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 	// One image per base: one per platform built for.
 	images := make([]v1.Image, len(bases))
 	for i, base := range bases {
+		if err := b.logCommand(base.image, log); err != nil {
+			return nil, err
+		}
 		req.BaseImage, req.Platform = base.image, base.platform
 		image, err := build.Execute(ctx, req)
 		if err != nil {
@@ -258,4 +301,60 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 	b.emitProgress(PhaseFinalizing, "Finalizing...")
 
 	return result, nil
+}
+
+// logCommand logs the entrypoint and program arguments the image built
+// on base runs, as Jib's BuildImageStep logs them.
+func (b *ContainerBuilder) logCommand(base v1.Image, log LogHandler) error {
+	cfg, err := base.ConfigFile()
+	if err != nil {
+		return err
+	}
+	entrypoint, inherited := b.entrypoint, false
+	if cfg.Config.Entrypoint != nil && b.entrypoint == nil {
+		entrypoint, inherited = cfg.Config.Entrypoint, true
+	}
+	if entrypoint != nil {
+		log.log(LevelLifecycle, "")
+		if inherited {
+			log.log(LevelLifecycle, "Container entrypoint set to %s (inherited from base image)", javaList(entrypoint))
+		} else {
+			log.log(LevelLifecycle, "Container entrypoint set to %s", truncateClasspath(entrypoint))
+		}
+	}
+	args, suffix := b.programArguments, ""
+	if cfg.Config.Cmd != nil && b.entrypoint == nil && b.programArguments == nil {
+		args, suffix = cfg.Config.Cmd, " (inherited from base image)"
+	}
+	if args != nil {
+		log.log(LevelLifecycle, "Container program arguments set to %s%s", javaList(args), suffix)
+	}
+	return nil
+}
+
+// truncateClasspath is an entrypoint with a classpath of more than 200
+// characters cut short, as Jib logs it.
+func truncateClasspath(entrypoint []string) string {
+	var out []string
+	for i := 0; i < len(entrypoint); i++ {
+		out = append(out, entrypoint[i])
+		if (entrypoint[i] == "-cp" || entrypoint[i] == "-classpath") && i+1 < len(entrypoint) {
+			i++
+			cp := entrypoint[i]
+			if len(cp) > 200 {
+				cp = cp[:200] + "<... classpath truncated ...>"
+			}
+			out = append(out, cp)
+		}
+	}
+	return javaList(out)
+}
+
+func capitalize(s string) string {
+	if s == "" {
+		return s
+	}
+	r := []rune(s)
+	r[0] = unicode.ToUpper(r[0])
+	return string(r)
 }
