@@ -129,15 +129,18 @@ layers:
 gib build --target <image> [options] [@<argfile>...]
 ```
 
-`gib build` takes exactly the options of `jib build`, and refuses what
-it refuses: a command line Jib rejects exits 2, a build that fails exits
-1. The container settings of `jib jar` and `jib war` (`--from`,
-`--entrypoint` and the like) belong in the build file.
+`gib build` takes the options of `jib build`, and refuses what it
+refuses: a command line Jib rejects exits 2, a build that fails exits
+1. The container settings of `jib jar` and `jib war` (`--entrypoint`
+and the like) belong in the build file. One option is gib's own:
+`--from` builds on another base image than the build file names, such
+as a tarball a sandboxed build is handed in place of a registry pull.
 
 | Option | Description |
 |---|---|
 | `-t, --target` | **(required)** Target image: a reference, `registry://<ref>`, `docker://<ref>` or `tar://<path>` |
 | `--name` | The image's name in a tarball (required with `tar://`) |
+| `--from` | The base image, in place of the build file's `from.image` (gib only) |
 | `-b, --build-file` | Build file path (default: `<context>/jib.yaml`) |
 | `-c, --context` | Build context directory (default: `.`) |
 | `-p, --parameter` | Template parameter `name=value` (repeatable) |

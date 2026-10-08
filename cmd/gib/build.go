@@ -24,6 +24,7 @@ const prompt = "\x00prompt"
 type buildFlags struct {
 	credentialFlags
 	target, name                     string
+	from                             string
 	buildFile, context               string
 	parameters                       map[string]string
 	additionalTags                   []string
@@ -71,6 +72,8 @@ func newBuildCmd(args []string, stdin io.Reader) *cobra.Command {
 	str(&f.context, "context", "c", "<project-root>", "The context root directory of the build (ex: path/to/my/build/things)")
 	fs.VarP(&keyValues{name: "parameter", label: "<name>=<value>", m: f.parameters}, "parameter", "p",
 		"templating parameter to inject into build file, replace ${<name>} with <value> (repeatable)")
+	str(&f.from, "from", "", "<base-image>",
+		"The base image, in place of the build file's from.image, with the same schemes (a gib extension; Jib's build has no --from)")
 	str(&f.name, "name", "", "<image-reference>", "The image reference to inject into the tar configuration (required when using --target tar://...)")
 	fs.Var(&list{values: &f.additionalTags}, "additional-tags", "Additional tags for target image")
 	str(&f.baseImageCache, "base-image-cache", "", "<cache-directory>", "A path to a base image cache")
@@ -151,6 +154,12 @@ func runBuild(cmd *cobra.Command, f *buildFlags, args, positional []string, stdi
 	spec, err := buildfile.Parse(file, f.parameters)
 	if err != nil {
 		return fail(err)
+	}
+	if cmd.Flags().Changed("from") {
+		if spec.From == nil {
+			spec.From = &buildfile.BaseImageSpec{}
+		}
+		spec.From.Image = f.from
 	}
 	builder, err := buildfile.Convert(spec, f.context, nil)
 	if err != nil {
@@ -308,6 +317,9 @@ func (f *buildFlags) validate(cmd *cobra.Command, args, positional []string) err
 	}
 	if strings.HasPrefix(f.target, "tar://") && !set("name") {
 		return usagef(cmd, "Missing option: --name must be specified when using --target=tar://....")
+	}
+	if cmd.Flags().Changed("from") && f.from == "" {
+		return usagef(cmd, "Value for option '--from' (<base-image>) cannot be empty")
 	}
 	return nil
 }

@@ -95,7 +95,7 @@ func TestBuild_RefusesTheCommandLinesJibRefuses(t *testing.T) {
 		{[]string{"build", "-t", "x", "--console", "fancy"}, "Invalid value for option '--console': expected one of [auto, rich, plain] (case-sensitive) but was 'fancy'"},
 		{[]string{"build", "-t", "x", "--http-trace=most"}, "Invalid value for option '--http-trace': expected one of [off, config, all] (case-sensitive) but was 'most'"},
 		{[]string{"build", "-t", "x", "-p", "a"}, "Value for option '--parameter' (<name>=<value>) should be in KEY=VALUE format but was a"},
-		{[]string{"build", "-t", "x", "--from", "alpine"}, "Unknown option: '--from'"},
+		{[]string{"build", "-t", "x", "--from", ""}, "Value for option '--from' (<base-image>) cannot be empty"},
 		{[]string{"build", "-t", "x", "--entrypoint", "/app"}, "Unknown option: '--entrypoint'"},
 		{[]string{"build", "-t", "x", "-x"}, "Unknown option: '-x'"},
 		{[]string{"build", "-t", "x", "--username", "u"}, "Error: Missing required argument(s): --password"},
@@ -131,6 +131,21 @@ func TestBuild_WritesATarballAndItsMetadataAsJibDoes(t *testing.T) {
 	meta, err := os.ReadFile(filepath.Join(dir, "m.json"))
 	require.NoError(t, err)
 	assert.Regexp(t, `^\{"image":"test/x","imageId":"sha256:[0-9a-f]{64}","imageDigest":"sha256:[0-9a-f]{64}","tags":\["a","b","latest"\],"imagePushed":false\}$`, string(meta))
+}
+
+// --from, a gib extension, builds on another base than the build file
+// names: the base a sandbox was handed, for one.
+func TestBuild_FromReplacesTheBuildFilesBase(t *testing.T) {
+	dir := project(t, appBuildFile)
+	code, _, errOut := runGib(t, dir, "", "build", "-t", "tar://base.tar", "--name", "base", "-c", "p")
+	require.Equal(t, 0, code, errOut)
+
+	code, _, errOut = runGib(t, dir, "", "build", "-t", "tar://o.tar", "--name", "app", "-c", "p", "--from", "tar://"+filepath.Join(dir, "base.tar"))
+
+	require.Equal(t, 0, code, errOut)
+	var m []struct{ Layers []string }
+	require.NoError(t, json.Unmarshal(tarFile(t, filepath.Join(dir, "o.tar"), "manifest.json"), &m))
+	assert.Len(t, m[0].Layers, 2, "the base's layer and the app's")
 }
 
 func TestBuild_ReadsTheBuildFileInTheContext(t *testing.T) {
