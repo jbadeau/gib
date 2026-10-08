@@ -27,7 +27,7 @@ func TestPushCmd_PrintsThePushedDigest(t *testing.T) {
 	cmd := newPushCmd()
 	var out bytes.Buffer
 	cmd.SetOut(&out)
-	cmd.SetArgs([]string{file, strings.TrimPrefix(srv.URL, "http://") + "/acme/app:1.4.0"})
+	cmd.SetArgs([]string{"--allow-insecure-registries", file, strings.TrimPrefix(srv.URL, "http://") + "/acme/app:1.4.0"})
 	require.NoError(t, cmd.Execute())
 
 	want, _ := img.Digest()
@@ -40,8 +40,16 @@ func TestPushCmd_TakesATarballAndAReference(t *testing.T) {
 	require.Error(t, cmd.Execute())
 }
 
-func TestTargetOptions_PreferTheTargetFlags(t *testing.T) {
-	assert.Len(t, targetOptions("u", "p", "", "", "", ""), 1)
-	assert.Len(t, targetOptions("", "", "", "tu", "tp", "gcr"), 2)
-	assert.Empty(t, targetOptions("u", "", "", "", "", ""))
+func TestPushCmd_RefusesPlainHTTPUnlessInsecureRegistriesAreAllowed(t *testing.T) {
+	srv := httptest.NewServer(registry.New())
+	defer srv.Close()
+	img, err := random.Image(128, 1)
+	require.NoError(t, err)
+	file := filepath.Join(t.TempDir(), "image.tar")
+	tag, _ := name.NewTag("acme/app:latest")
+	require.NoError(t, tarball.WriteToFile(file, tag, img))
+
+	cmd := newPushCmd()
+	cmd.SetArgs([]string{file, strings.TrimPrefix(srv.URL, "http://") + "/acme/app:1.4.0"})
+	assert.ErrorContains(t, cmd.Execute(), "because only secure connections are allowed")
 }

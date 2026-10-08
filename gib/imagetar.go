@@ -9,7 +9,6 @@ import (
 	"os"
 	"path"
 
-	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/types"
 )
@@ -21,7 +20,10 @@ import (
 // manifest's exact bytes among them and index.json naming it. `docker
 // load` reads either, and `gib push` pushes the manifest built here, so
 // the digest a registry reports is the one the build reports.
-func writeImageTar(file string, tag name.Tag, img v1.Image) (err error) {
+//
+// The docker-save archive names the image by each of repoTags; the OCI
+// image layout names it refName.
+func writeImageTar(file string, repoTags []string, refName string, img v1.Image) (err error) {
 	f, err := os.Create(file)
 	if err != nil {
 		return err
@@ -31,10 +33,10 @@ func writeImageTar(file string, tag name.Tag, img v1.Image) (err error) {
 			err = cerr
 		}
 	}()
-	return writeImage(f, tag, img)
+	return writeImage(f, repoTags, refName, img)
 }
 
-func writeImage(w io.Writer, tag name.Tag, img v1.Image) error {
+func writeImage(w io.Writer, repoTags []string, refName string, img v1.Image) error {
 	raw, err := img.RawManifest()
 	if err != nil {
 		return err
@@ -103,7 +105,7 @@ func writeImage(w io.Writer, tag name.Tag, img v1.Image) error {
 	}
 
 	if !oci {
-		docker, err := json.Marshal([]dockerImage{{Config: "config.json", RepoTags: []string{tag.String()}, Layers: layerPaths}})
+		docker, err := json.Marshal([]dockerImage{{Config: "config.json", RepoTags: repoTags, Layers: layerPaths}})
 		if err != nil {
 			return err
 		}
@@ -129,7 +131,7 @@ func writeImage(w io.Writer, tag name.Tag, img v1.Image) error {
 			MediaType:   mt,
 			Size:        int64(len(raw)),
 			Digest:      digest,
-			Annotations: map[string]string{"org.opencontainers.image.ref.name": tag.String()},
+			Annotations: map[string]string{"org.opencontainers.image.ref.name": refName},
 		}},
 	})
 	if err != nil {

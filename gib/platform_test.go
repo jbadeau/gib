@@ -29,7 +29,7 @@ func scratchFor(platforms ...string) *ContainerBuilder {
 func tarOf(t *testing.T, b *ContainerBuilder) (string, error) {
 	t.Helper()
 	file := filepath.Join(t.TempDir(), "image.tar")
-	_, err := b.Containerize(context.Background(), ToTar(file, WithTarImageName("acme/app:1")))
+	_, err := b.Containerize(context.Background(), ToTar(file, WithTarImageName("acme/app:1"), WithAllowInsecureRegistries(true)))
 	return file, err
 }
 
@@ -112,7 +112,7 @@ func TestPlatform_AManifestListWithoutThePlatformIsRefused(t *testing.T) {
 func pushedList(t *testing.T, b *ContainerBuilder, tags ...string) (*Container, map[string]*remote.Descriptor) {
 	t.Helper()
 	ref := serve(t) + "/acme/app:1"
-	var opts []ContainerizerOption
+	opts := []ContainerizerOption{WithAllowInsecureRegistries(true)}
 	for _, tag := range tags {
 		opts = append(opts, WithAdditionalTag(tag))
 	}

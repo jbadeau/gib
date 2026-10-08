@@ -45,7 +45,14 @@ func (c *Containerizer) Push(ctx context.Context, tarPath string) (*Container, e
 	if c.targetType != "registry" {
 		return nil, fmt.Errorf("push needs a registry target, not %s", c.targetType)
 	}
-	ref, err := name.ParseReference(c.registryRef, c.nameOptions()...)
+	jref, err := parseReference(c.registryRef)
+	if err != nil {
+		return nil, err
+	}
+	if err := c.creds.check(); err != nil {
+		return nil, err
+	}
+	ref, err := name.ParseReference(c.registryRef)
 	if err != nil {
 		return nil, fmt.Errorf("invalid target reference %q: %w", c.registryRef, err)
 	}
@@ -65,7 +72,7 @@ func (c *Containerizer) Push(ctx context.Context, tarPath string) (*Container, e
 		return nil, fmt.Errorf("%s: %w", tarPath, err)
 	}
 
-	opts := c.registryOptions(ctx)
+	opts := c.registryOptions(ctx, jref)
 	switch t := t.(type) {
 	case v1.ImageIndex:
 		err = remote.WriteIndex(tag, t, opts...)
@@ -77,7 +84,7 @@ func (c *Containerizer) Push(ctx context.Context, tarPath string) (*Container, e
 	}
 	tags := []string{tag.TagStr()}
 	for _, extra := range c.additionalTags {
-		et, err := name.NewTag(tag.Context().String()+":"+extra, c.nameOptions()...)
+		et, err := name.NewTag(tag.Context().String() + ":" + extra)
 		if err != nil {
 			return nil, fmt.Errorf("invalid additional tag %q: %w", extra, err)
 		}
@@ -91,7 +98,7 @@ func (c *Containerizer) Push(ctx context.Context, tarPath string) (*Container, e
 	if err != nil {
 		return nil, err
 	}
-	out := &Container{Digest: digest, Tags: tags, TargetImage: tag.String()}
+	out := &Container{Digest: digest, Tags: tags, TargetImage: tag.String(), ImagePushed: true}
 	if img, ok := t.(v1.Image); ok {
 		if out.ImageID, err = img.ConfigName(); err != nil {
 			return nil, err

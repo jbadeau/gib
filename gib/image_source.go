@@ -4,22 +4,26 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net/http"
+	"strings"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/daemon"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/remote/transport"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/google/go-containerregistry/pkg/v1/types"
-
-	"github.com/google/go-containerregistry/pkg/authn"
-	"github.com/google/go-containerregistry/pkg/name"
 )
 
 // ImageSource provides a base image.
 type ImageSource interface {
-	resolve(ctx context.Context, platforms []v1.Platform) ([]base, error)
+	resolve(ctx context.Context, platforms []v1.Platform, settings registrySettings) ([]base, error)
+	check() error
 	description() string
 }
 
@@ -83,45 +87,43 @@ func listed(idx v1.ImageIndex, platforms []v1.Platform, name string) ([]base, er
 // ImageSourceOption configures a registry-based ImageSource.
 type ImageSourceOption func(*registrySource)
 
+// WithSourceCredential sets the base image registry's credential, logged
+// as coming from source.
+func WithSourceCredential(cred Credential, source string) ImageSourceOption {
+	return func(s *registrySource) {
+		s.creds.known = &cred
+		s.creds.knownSource = source
+	}
+}
+
 // WithSourceCredentials sets explicit username/password credentials for the base image registry.
 func WithSourceCredentials(username, password string) ImageSourceOption {
-	return func(s *registrySource) {
-		s.authOptions = append(s.authOptions, remote.WithAuth(&authn.Basic{
-			Username: username,
-			Password: password,
-		}))
-		s.hasAuth = true
-	}
+	return WithSourceCredential(Credential{Username: username, Password: password}, "username and password")
 }
 
-// WithSourceCredentialHelper sets the credential helper suffix for the base image registry.
-func WithSourceCredentialHelper(suffix string) ImageSourceOption {
-	return func(s *registrySource) {
-		kc := newCredentialHelperKeychain(suffix)
-		s.authOptions = append(s.authOptions, remote.WithAuthFromKeychain(
-			authn.NewMultiKeychain(kc, authn.DefaultKeychain),
-		))
-		s.hasAuth = true
-	}
+// WithSourceCredentialHelper sets the credential helper for the base
+// image registry: a path to one, or the suffix of a
+// docker-credential-<suffix> on the PATH.
+func WithSourceCredentialHelper(helper string) ImageSourceOption {
+	return func(s *registrySource) { s.creds.helper = helper }
 }
 
-// WithSourceInsecure allows HTTP (non-TLS) connections to the base image registry.
+// WithSourceInsecure lets the base image registry be reached as
+// WithAllowInsecureRegistries lets every registry be.
 func WithSourceInsecure() ImageSourceOption {
-	return func(s *registrySource) {
-		s.nameOptions = append(s.nameOptions, name.Insecure)
-	}
+	return func(s *registrySource) { s.insecure = true }
 }
 
 type registrySource struct {
-	ref         string
-	nameOptions []name.Option
-	authOptions []remote.Option
-	hasAuth     bool
+	ref      string
+	creds    credentials
+	insecure bool
 }
 
-// RegistrySource creates an ImageSource that pulls from a registry.
+// RegistrySource creates an ImageSource that pulls from a registry. A
+// registry:// prefix on ref is dropped, as Jib drops it.
 func RegistrySource(ref string, opts ...ImageSourceOption) ImageSource {
-	s := &registrySource{ref: ref}
+	s := &registrySource{ref: strings.TrimPrefix(ref, "registry://")}
 	for _, opt := range opts {
 		opt(s)
 	}
@@ -130,23 +132,40 @@ func RegistrySource(ref string, opts ...ImageSourceOption) ImageSource {
 
 func (s *registrySource) description() string { return s.ref }
 
-func (s *registrySource) resolve(ctx context.Context, platforms []v1.Platform) ([]base, error) {
-	ref, err := name.ParseReference(s.ref, s.nameOptions...)
+// check fails, as Jib does before it builds anything, for a reference
+// it does not parse or a credential helper path that does not exist.
+func (s *registrySource) check() error {
+	if _, err := parseReference(s.ref); err != nil {
+		return err
+	}
+	return s.creds.check()
+}
+
+// resolve pulls the base image's manifest as Jib's PullBaseImageStep
+// does: from each mirror of its registry first, then from the registry
+// without credentials, and only when that is refused, with them.
+func (s *registrySource) resolve(ctx context.Context, platforms []v1.Platform, settings registrySettings) ([]base, error) {
+	ref, err := parseReference(s.ref)
 	if err != nil {
 		return nil, err
 	}
+	settings.allowInsecure = settings.allowInsecure || s.insecure
+	log := settings.log
+	log.log(LevelProgress, "Getting manifest for base image %s...", ref)
 
-	opts := []remote.Option{remote.WithContext(ctx)}
-	if s.hasAuth {
-		opts = append(opts, s.authOptions...)
-	} else {
-		opts = append(opts, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	desc, err := s.fromMirrors(ctx, ref, settings)
+	if desc == nil {
+		desc, err = get(ref, settings.options(ctx, ref, remote.WithAuth(authn.Anonymous)))
+		if unauthorized(err) {
+			log.log(LevelLifecycle, "The base image requires auth. Trying again for %s...", ref)
+			auth := remote.WithAuthFromKeychain(&keychain{rs: s.creds.retrievers(ref, log)})
+			desc, err = get(ref, settings.options(ctx, ref, auth))
+		}
 	}
-
-	desc, err := remote.Get(ref, opts...)
 	if err != nil {
 		return nil, err
 	}
+	log.log(LevelLifecycle, "Using base image with digest: %s", desc.Digest)
 	if desc.MediaType.IsIndex() {
 		idx, err := desc.ImageIndex()
 		if err != nil {
@@ -159,6 +178,40 @@ func (s *registrySource) resolve(ctx context.Context, platforms []v1.Platform) (
 		return nil, err
 	}
 	return single(img, platforms, s.ref)
+}
+
+// fromMirrors is the base image's manifest from the first mirror of its
+// registry that has it, without credentials, or nil.
+func (s *registrySource) fromMirrors(ctx context.Context, ref reference, settings registrySettings) (*remote.Descriptor, error) {
+	for _, m := range settings.mirrors[ref.registry] {
+		settings.log.log(LevelDebug, "mirror config: %s --> %s", ref.registry, m)
+		settings.log.log(LevelInfo, "trying mirror %s for the base image", m)
+		mr := ref
+		mr.registry = m
+		desc, err := get(mr, settings.options(ctx, mr, remote.WithAuth(authn.Anonymous)))
+		if err != nil {
+			settings.log.log(LevelDebug, "failed to get manifest from mirror %s: %s", m, err)
+			continue
+		}
+		settings.log.log(LevelInfo, "pulled manifest from mirror %s", m)
+		return desc, nil
+	}
+	return nil, nil
+}
+
+func get(ref reference, opts []remote.Option) (*remote.Descriptor, error) {
+	n, err := ref.name()
+	if err != nil {
+		return nil, err
+	}
+	return remote.Get(n, opts...)
+}
+
+// unauthorized reports whether a registry refused err's request for its
+// credentials: 401 or 403, as Jib's RegistryUnauthorizedException.
+func unauthorized(err error) bool {
+	var t *transport.Error
+	return errors.As(err, &t) && (t.StatusCode == http.StatusUnauthorized || t.StatusCode == http.StatusForbidden)
 }
 
 type tarSource struct {
@@ -176,7 +229,9 @@ func (s *tarSource) description() string { return s.path }
 // manifest.json. A tarball holding only an OCI image layout, as gib
 // writes an OCI-format image, is read by its index.json: an index of
 // several images is a manifest list, any other a single image.
-func (s *tarSource) resolve(_ context.Context, platforms []v1.Platform) ([]base, error) {
+func (s *tarSource) check() error { return nil }
+
+func (s *tarSource) resolve(_ context.Context, platforms []v1.Platform, _ registrySettings) ([]base, error) {
 	img, err := tarball.ImageFromPath(s.path, nil)
 	if err == nil {
 		return single(img, platforms, s.path)
@@ -228,9 +283,12 @@ type scratchSource struct{}
 
 func (s *scratchSource) description() string { return "scratch" }
 
+func (s *scratchSource) check() error { return nil }
+
 // resolve is an empty image for every platform, as Jib builds from
 // scratch: each image takes its platform from what it is built for.
-func (s *scratchSource) resolve(_ context.Context, platforms []v1.Platform) ([]base, error) {
+func (s *scratchSource) resolve(_ context.Context, platforms []v1.Platform, settings registrySettings) ([]base, error) {
+	settings.log.log(LevelProgress, "Getting scratch base image...")
 	out := make([]base, len(platforms))
 	for i, p := range platforms {
 		out[i] = base{image: empty.Image, platform: p}
@@ -250,7 +308,13 @@ func DockerDaemonSource(ref string) ImageSource {
 
 func (s *dockerSource) description() string { return s.ref }
 
-func (s *dockerSource) resolve(ctx context.Context, platforms []v1.Platform) ([]base, error) {
+func (s *dockerSource) check() error {
+	_, err := name.ParseReference(s.ref)
+	return err
+}
+
+func (s *dockerSource) resolve(ctx context.Context, platforms []v1.Platform, settings registrySettings) ([]base, error) {
+	settings.log.log(LevelProgress, "Getting image from Docker daemon...")
 	ref, err := name.ParseReference(s.ref)
 	if err != nil {
 		return nil, err

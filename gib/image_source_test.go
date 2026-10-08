@@ -1,86 +1,79 @@
 package gib
 
 import (
+	"context"
+	"path/filepath"
 	"testing"
 
+	"github.com/google/go-containerregistry/pkg/authn"
+	"github.com/google/go-containerregistry/pkg/name"
+	"github.com/google/go-containerregistry/pkg/v1/random"
+	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
-func TestRegistrySource_DefaultKeychain(t *testing.T) {
-	src := RegistrySource("gcr.io/project/image:latest")
-	rs, ok := src.(*registrySource)
-	require.True(t, ok)
-	assert.False(t, rs.hasAuth)
-	assert.Empty(t, rs.authOptions)
-	assert.Empty(t, rs.nameOptions)
+// pushBase pushes a base image to ref and returns its digest.
+func pushBase(t *testing.T, ref string, opts ...remote.Option) string {
+	t.Helper()
+	img, err := random.Image(64, 1)
+	require.NoError(t, err)
+	r, err := name.ParseReference(ref)
+	require.NoError(t, err)
+	require.NoError(t, remote.Write(r, img, opts...))
+	d, err := img.Digest()
+	require.NoError(t, err)
+	return d.String()
 }
 
-func TestRegistrySource_WithSourceCredentials(t *testing.T) {
-	src := RegistrySource("gcr.io/project/image:latest",
-		WithSourceCredentials("user", "pass"),
-	)
-	rs, ok := src.(*registrySource)
-	require.True(t, ok)
-	assert.True(t, rs.hasAuth)
-	assert.Len(t, rs.authOptions, 1)
+func toTar(t *testing.T, opts ...ContainerizerOption) *Containerizer {
+	t.Helper()
+	return ToTar(filepath.Join(t.TempDir(), "image.tar"), append(opts, WithTarImageName("x"), WithAllowInsecureRegistries(true))...)
 }
 
-func TestRegistrySource_WithSourceCredentialHelper(t *testing.T) {
-	src := RegistrySource("gcr.io/project/image:latest",
-		WithSourceCredentialHelper("gcr"),
-	)
-	rs, ok := src.(*registrySource)
-	require.True(t, ok)
-	assert.True(t, rs.hasAuth)
-	assert.Len(t, rs.authOptions, 1)
+func TestRegistrySource_PullsWithoutCredentialsFirst(t *testing.T) {
+	isolated(t)
+	ref := serve(t) + "/acme/base:1"
+	digest := pushBase(t, ref)
+	l := &logs{}
+
+	_, err := From(ref, WithSourceCredentialHelper("nonexistent")).OnLog(l.handle).Containerize(context.Background(), toTar(t))
+
+	require.NoError(t, err, "the helper is never run")
+	assert.Equal(t, []string{"Using base image with digest: " + digest}, l.at(LevelLifecycle))
+	assert.Contains(t, l.at(LevelProgress), "Getting manifest for base image "+ref+"...")
 }
 
-func TestRegistrySource_WithSourceInsecure(t *testing.T) {
-	src := RegistrySource("localhost:5000/image:latest",
-		WithSourceInsecure(),
-	)
-	rs, ok := src.(*registrySource)
-	require.True(t, ok)
-	assert.Len(t, rs.nameOptions, 1)
+func TestRegistrySource_AskedForCredentialsTriesAgainWithThem(t *testing.T) {
+	isolated(t)
+	host := serveWithAuth(t, "u", "p")
+	ref := host + "/acme/base:1"
+	pushBase(t, ref, remote.WithAuth(&authn.Basic{Username: "u", Password: "p"}))
+	l := &logs{}
+
+	_, err := From(ref, WithSourceCredential(Credential{"u", "p"}, "--from-username/--from-password")).OnLog(l.handle).
+		Containerize(context.Background(), toTar(t, WithSendCredentialsOverHTTP(true)))
+
+	require.NoError(t, err)
+	assert.Equal(t, []string{
+		"The base image requires auth. Trying again for " + ref + "...",
+		"Using credentials from --from-username/--from-password for " + ref,
+	}, l.at(LevelLifecycle)[:2])
 }
 
-func TestRegistrySource_MultipleOptions(t *testing.T) {
-	src := RegistrySource("localhost:5000/image:latest",
-		WithSourceCredentials("user", "pass"),
-		WithSourceInsecure(),
-	)
-	rs, ok := src.(*registrySource)
-	require.True(t, ok)
-	assert.True(t, rs.hasAuth)
-	assert.Len(t, rs.authOptions, 1)
-	assert.Len(t, rs.nameOptions, 1)
-}
+func TestRegistrySource_PullsFromAMirrorFirst(t *testing.T) {
+	isolated(t)
+	origin, mirror := serve(t), serve(t)
+	pushBase(t, mirror+"/acme/base:1")
+	l := &logs{}
 
-func TestTarSource_Constructor(t *testing.T) {
-	src := TarSource("/path/to/image.tar")
-	_, ok := src.(*tarSource)
-	assert.True(t, ok)
-}
+	_, err := From(origin+"/acme/base:1").OnLog(l.handle).
+		Containerize(context.Background(), toTar(t, WithRegistryMirrors(origin, "unreachable.invalid", mirror)))
 
-func TestFrom_WithSourceOptions(t *testing.T) {
-	builder := From("gcr.io/project/image:latest",
-		WithSourceCredentials("user", "pass"),
-		WithSourceInsecure(),
-	)
-	require.NotNil(t, builder)
-
-	rs, ok := builder.source.(*registrySource)
-	require.True(t, ok)
-	assert.True(t, rs.hasAuth)
-	assert.Len(t, rs.nameOptions, 1)
-}
-
-func TestFrom_NoOptions(t *testing.T) {
-	builder := From("gcr.io/project/image:latest")
-	require.NotNil(t, builder)
-
-	rs, ok := builder.source.(*registrySource)
-	require.True(t, ok)
-	assert.False(t, rs.hasAuth)
+	require.NoError(t, err, "the origin has no such image")
+	assert.Equal(t, []string{
+		"trying mirror unreachable.invalid for the base image",
+		"trying mirror " + mirror + " for the base image",
+		"pulled manifest from mirror " + mirror,
+	}, l.at(LevelInfo)[1:])
 }

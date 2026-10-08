@@ -1,303 +1,391 @@
 package main
 
 import (
-	"encoding/json"
+	"bufio"
+	"errors"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 
-	lipgloss "charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/term"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 
 	"github.com/jbadeau/gib"
 	"github.com/jbadeau/gib/buildfile"
 )
 
-var (
-	stepStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
-	messageStyle = lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
-	doneStyle    = lipgloss.NewStyle().Foreground(lipgloss.Color("2")).Bold(true)
-	barFilled    = lipgloss.NewStyle().Foreground(lipgloss.Color("6"))
-	barEmpty     = lipgloss.NewStyle().Foreground(lipgloss.Color("8"))
-)
+// prompt is the value an interactive password option takes when it is
+// given without one: the password is then read from the console.
+const prompt = "\x00prompt"
 
-var phaseLabels = map[gib.ProgressPhase]string{
-	gib.PhaseContainerizing: "Containerizing",
-	gib.PhasePullingBase:    "Pulling base",
-	gib.PhaseBuildingLayer:  "Building layer",
-	gib.PhaseBuildingImage:  "Building image",
-	gib.PhaseWriting:        "Writing",
-	gib.PhaseFinalizing:     "Finalizing",
-}
-
-func newProgressWriter(layerCount int) gib.ProgressCallback {
-	// Total steps: containerizing, pulling base, N layers, building image, writing, finalizing
-	total := 5 + layerCount
-	step := 0
-	return func(event gib.ProgressEvent) {
-		step++
-		progress := float64(step) / float64(total)
-		if progress > 1 {
-			progress = 1
-		}
-
-		barWidth := 30
-		filled := int(progress * float64(barWidth))
-		bar := barFilled.Render(strings.Repeat("█", filled)) +
-			barEmpty.Render(strings.Repeat("░", barWidth-filled))
-
-		label := phaseLabels[event.Phase]
-		if label == "" {
-			label = string(event.Phase)
-		}
-
-		// Clear line and overwrite in place
-		_, _ = fmt.Fprintf(os.Stderr, "\r\033[K %s %s %s",
-			bar,
-			stepStyle.Render(label),
-			messageStyle.Render(event.Message),
-		)
-
-		if event.Phase == gib.PhaseFinalizing {
-			_, _ = fmt.Fprintf(os.Stderr, "\r\033[K %s\n", doneStyle.Render("✓ Done"))
-		}
-	}
-}
-
+// buildFlags are Jib's `build` options: its own and CommonCliOptions.
 type buildFlags struct {
-	target                  string
-	buildFile               string
-	context                 string
-	parameters              map[string]string
-	name                    string
-	additionalTags          []string
-	from                    string
-	credentialHelper        string
-	username                string
-	password                string
-	toCredentialHelper      string
-	toUsername              string
-	toPassword              string
-	fromCredentialHelper    string
-	fromUsername            string
-	fromPassword            string
-	baseImageCache          string
-	projectCache            string
-	allowInsecureRegistries bool
-	sendCredentialsOverHTTP bool
-	imageFormat             string
-	creationTime            string
-	entrypoint              []string
-	programArgs             []string
-	expose                  []string
-	volumes                 []string
-	environmentVariables    map[string]string
-	labels                  map[string]string
-	user                    string
-	verbosity               string
-	imageMetadataOut        string
+	credentialFlags
+	target, name                     string
+	buildFile, context               string
+	parameters                       map[string]string
+	additionalTags                   []string
+	baseImageCache, projectCache     string
+	allowInsecure, sendCredsOverHTTP bool
+	fromCredentialHelper             string
+	fromUsername, fromPassword       string
+	verbosity, console, httpTrace    string
+	stacktrace, serialize, version   bool
+	imageMetadataOut                 string
 }
 
-func newBuildCmd() *cobra.Command {
-	f := &buildFlags{
-		parameters:           make(map[string]string),
-		environmentVariables: make(map[string]string),
-		labels:               make(map[string]string),
-	}
+var passwordPrompts = map[string]string{
+	"password":      "password for communicating with both target and base image registries",
+	"to-password":   "password for communicating with target image registry",
+	"from-password": "password for communicating with base image registry",
+}
 
+func newBuildCmd(args []string, stdin io.Reader) *cobra.Command {
+	f := &buildFlags{parameters: map[string]string{}, context: ".", verbosity: "lifecycle", console: "auto", httpTrace: "off"}
 	cmd := &cobra.Command{
 		Use:   "build",
-		Short: "Build a container image from a build file",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runBuild(cmd, f)
+		Short: "Build a container",
+		Args:  cobra.ArbitraryArgs,
+		RunE: func(cmd *cobra.Command, positional []string) error {
+			return runBuild(cmd, f, args, positional, stdin)
 		},
 	}
+	fs := cmd.Flags()
+	str := func(p *string, name, short, label, usage string) *pflag.Flag {
+		fs.VarP(&once{name: name, label: label, value: p}, name, short, usage)
+		fl := fs.Lookup(name)
+		fl.Annotations = map[string][]string{"label": {label}}
+		return fl
+	}
+	enum := func(p *string, name, label, usage string, choices ...string) *pflag.Flag {
+		fs.Var(&choice{once: once{name: name, label: label, value: p}, choices: choices}, name, usage)
+		fl := fs.Lookup(name)
+		fl.Annotations = map[string][]string{"label": {label}}
+		return fl
+	}
 
-	cmd.Flags().StringVarP(&f.target, "target", "t", "", "target image reference or tar://path (required)")
-	cmd.Flags().StringVarP(&f.buildFile, "build-file", "b", "jib.yaml", "path to build file")
-	cmd.Flags().StringVarP(&f.context, "context", "c", ".", "context root directory")
-	cmd.Flags().StringToStringVarP(&f.parameters, "parameter", "p", nil, "template parameters (key=value)")
-	cmd.Flags().StringVar(&f.name, "name", "", "image reference for tar targets")
-	cmd.Flags().StringSliceVar(&f.additionalTags, "additional-tags", nil, "additional tags")
-	cmd.Flags().StringVar(&f.from, "from", "", "base image override")
-	cmd.Flags().StringVar(&f.credentialHelper, "credential-helper", "", "credential helper suffix")
-	cmd.Flags().StringVar(&f.username, "username", "", "registry username")
-	cmd.Flags().StringVar(&f.password, "password", "", "registry password")
-	cmd.Flags().StringVar(&f.toCredentialHelper, "to-credential-helper", "", "target credential helper")
-	cmd.Flags().StringVar(&f.toUsername, "to-username", "", "target registry username")
-	cmd.Flags().StringVar(&f.toPassword, "to-password", "", "target registry password")
-	cmd.Flags().StringVar(&f.fromCredentialHelper, "from-credential-helper", "", "base image credential helper")
-	cmd.Flags().StringVar(&f.fromUsername, "from-username", "", "base image registry username")
-	cmd.Flags().StringVar(&f.fromPassword, "from-password", "", "base image registry password")
-	cmd.Flags().StringVar(&f.baseImageCache, "base-image-cache", "", "base image layer cache directory")
-	cmd.Flags().StringVar(&f.projectCache, "project-cache", "", "project layer cache directory")
-	cmd.Flags().BoolVar(&f.allowInsecureRegistries, "allow-insecure-registries", false, "allow HTTP registries")
-	cmd.Flags().BoolVar(&f.sendCredentialsOverHTTP, "send-credentials-over-http", false, "allow sending credentials over HTTP")
-	cmd.Flags().StringVar(&f.imageFormat, "image-format", "", "image format (Docker or OCI)")
-	cmd.Flags().StringVar(&f.creationTime, "creation-time", "", "creation time (millis or ISO 8601)")
-	cmd.Flags().StringSliceVar(&f.entrypoint, "entrypoint", nil, "override entrypoint")
-	cmd.Flags().StringSliceVar(&f.programArgs, "program-args", nil, "override cmd")
-	cmd.Flags().StringSliceVar(&f.expose, "expose", nil, "override exposed ports")
-	cmd.Flags().StringSliceVar(&f.volumes, "volumes", nil, "override volumes")
-	cmd.Flags().StringToStringVar(&f.environmentVariables, "environment-variables", nil, "environment variables")
-	cmd.Flags().StringToStringVar(&f.labels, "labels", nil, "labels")
-	cmd.Flags().StringVar(&f.user, "user", "", "user")
-	cmd.Flags().StringVar(&f.verbosity, "verbosity", "lifecycle", "verbosity level")
-	cmd.Flags().StringVar(&f.imageMetadataOut, "image-metadata-out", "", "write result JSON to file")
-
-	_ = cmd.MarkFlagRequired("target")
-
+	str(&f.target, "target", "t", "<target-image>", "The destination image reference or jib style url,\nexamples:\n gcr.io/project/image,\n registry://image-ref,\n docker://image,\n tar://path")
+	str(&f.buildFile, "build-file", "b", "<build-file>", "The path to the build file (ex: path/to/other-jib.yaml)")
+	str(&f.context, "context", "c", "<project-root>", "The context root directory of the build (ex: path/to/my/build/things)")
+	fs.VarP(&keyValues{name: "parameter", label: "<name>=<value>", m: f.parameters}, "parameter", "p",
+		"templating parameter to inject into build file, replace ${<name>} with <value> (repeatable)")
+	str(&f.name, "name", "", "<image-reference>", "The image reference to inject into the tar configuration (required when using --target tar://...)")
+	fs.Var(&list{values: &f.additionalTags}, "additional-tags", "Additional tags for target image")
+	str(&f.baseImageCache, "base-image-cache", "", "<cache-directory>", "A path to a base image cache")
+	str(&f.projectCache, "project-cache", "", "<cache-directory>", "A path to the project cache")
+	fs.BoolVar(&f.allowInsecure, "allow-insecure-registries", false, "Allow jib to communicate with registries over http (insecure)")
+	fs.BoolVar(&f.sendCredsOverHTTP, "send-credentials-over-http", false, "Allow jib to send credentials over http (very insecure)")
+	str(&f.credentialHelper, "credential-helper", "", "<credential-helper>",
+		"credential helper for communicating with both target and base image registries, either a path to the helper, or a suffix for an executable named `docker-credential-<suffix>`")
+	str(&f.username, "username", "", "<username>", "username for communicating with both target and base image registries")
+	str(&f.password, "password", "", "<password>", passwordPrompts["password"]).NoOptDefVal = prompt
+	str(&f.toCredentialHelper, "to-credential-helper", "", "<credential-helper>",
+		"credential helper for communicating with target registry, either a path to the helper, or a suffix for an executable named `docker-credential-<suffix>`")
+	str(&f.toUsername, "to-username", "", "<username>", "username for communicating with target image registry")
+	str(&f.toPassword, "to-password", "", "<password>", passwordPrompts["to-password"]).NoOptDefVal = prompt
+	str(&f.fromCredentialHelper, "from-credential-helper", "", "<credential-helper>",
+		"credential helper for communicating with base image registry, either a path to the helper, or a suffix for an executable named `docker-credential-<suffix>`")
+	str(&f.fromUsername, "from-username", "", "<username>", "username for communicating with base image registry")
+	str(&f.fromPassword, "from-password", "", "<password>", passwordPrompts["from-password"]).NoOptDefVal = prompt
+	enum(&f.verbosity, "verbosity", "<level>", "set logging verbosity, candidates: quiet, error, warn, lifecycle, info, debug, default: lifecycle", verbosities...)
+	enum(&f.console, "console", "<type>", "set console output type, candidates: auto, rich, plain, default: auto", "auto", "rich", "plain")
+	fs.BoolVar(&f.stacktrace, "stacktrace", false, "")
+	enum(&f.httpTrace, "http-trace", "<httpTrace>", "set http logging level, candidates: off, config, all, default: off", "off", "config", "all").NoOptDefVal = "config"
+	fs.BoolVar(&f.serialize, "serialize", false, "")
+	str(&f.imageMetadataOut, "image-metadata-out", "", "<path-to-json>", "path to the json file that should contain image metadata (for example, digest, id and tags) after build is complete")
+	fs.BoolVarP(&f.version, "version", "V", false, "Print version information and exit.")
+	for _, h := range []string{"stacktrace", "http-trace", "serialize"} {
+		_ = fs.MarkHidden(h)
+	}
 	return cmd
 }
 
-func runBuild(cmd *cobra.Command, f *buildFlags) error {
-	ctx := cmd.Context()
+func runBuild(cmd *cobra.Command, f *buildFlags, args, positional []string, stdin io.Reader) error {
+	if f.version {
+		// Jib's build has no version of its own to print.
+		return nil
+	}
+	if err := f.prompt(cmd, stdin); err != nil {
+		return err
+	}
+	if err := f.validate(cmd, args, positional); err != nil {
+		return err
+	}
 
-	// Parse build file
-	spec, err := buildfile.Parse(f.buildFile, f.parameters)
+	con := newConsole(f.verbosity, f.console, f.httpTrace != "off", cmd.OutOrStdout(), cmd.ErrOrStderr())
+	fail := func(err error) error {
+		if f.stacktrace {
+			for e := err; e != nil; e = errors.Unwrap(e) {
+				con.errorf("%T: %s", e, e)
+			}
+		}
+		con.errorf("%s", message(err))
+		return errFailed
+	}
+
+	mirrors, err := registryMirrors()
 	if err != nil {
-		return fmt.Errorf("parsing build file: %w", err)
+		return fail(err)
+	}
+	file := f.buildFile
+	if file == "" {
+		file = resolve(f.context, "jib.yaml")
+	}
+	fi, err := os.Stat(file)
+	if err != nil || !readable(file) {
+		return fail(fmt.Errorf("The Build File YAML either does not exist or cannot be opened for reading: %s", file)) //nolint:staticcheck // Jib's message
+	}
+	if !fi.Mode().IsRegular() {
+		return fail(fmt.Errorf("Build File YAML path is a not a file: %s", file)) //nolint:staticcheck // Jib's message
+	}
+	if fi, err := os.Stat(f.context); err != nil || !fi.IsDir() {
+		return fail(fmt.Errorf("contextRoot must be a directory, but %s is not.", f.context)) //nolint:staticcheck // Jib's message
 	}
 
-	// Apply CLI overrides to spec
-	if f.from != "" {
-		if spec.From == nil {
-			spec.From = &buildfile.BaseImageSpec{}
-		}
-		spec.From.Image = f.from
+	target := f.containerizer(con, mirrors, cmd.Flags().Changed)
+	if err := target.Validate(); err != nil {
+		return fail(err)
 	}
-	if f.imageFormat != "" {
-		spec.Format = f.imageFormat
-	}
-	if f.creationTime != "" {
-		spec.CreationTime = f.creationTime
-	}
-	if f.entrypoint != nil {
-		spec.Entrypoint = f.entrypoint
-	}
-	if f.programArgs != nil {
-		spec.Cmd = f.programArgs
-	}
-	if f.expose != nil {
-		spec.ExposedPorts = f.expose
-	}
-	if f.volumes != nil {
-		spec.Volumes = f.volumes
-	}
-	if len(f.environmentVariables) > 0 {
-		if spec.Environment == nil {
-			spec.Environment = make(map[string]string)
-		}
-		for k, v := range f.environmentVariables {
-			spec.Environment[k] = v
-		}
-	}
-	if len(f.labels) > 0 {
-		if spec.Labels == nil {
-			spec.Labels = make(map[string]string)
-		}
-		for k, v := range f.labels {
-			spec.Labels[k] = v
-		}
-	}
-	if f.user != "" {
-		spec.User = f.user
-	}
-
-	// Build convert options with base image credentials
-	convertOpts := &buildfile.ConvertOptions{
-		AllowInsecureRegistries: f.allowInsecureRegistries,
-	}
-	fromUsername := f.fromUsername
-	fromPassword := f.fromPassword
-	if fromUsername == "" {
-		fromUsername = f.username
-	}
-	if fromPassword == "" {
-		fromPassword = f.password
-	}
-	if fromUsername != "" && fromPassword != "" {
-		convertOpts.FromUsername = fromUsername
-		convertOpts.FromPassword = fromPassword
-	}
-	fromCredHelper := f.fromCredentialHelper
-	if fromCredHelper == "" {
-		fromCredHelper = f.credentialHelper
-	}
-	if fromCredHelper != "" {
-		convertOpts.FromCredentialHelper = fromCredHelper
-	}
-
-	// Convert spec to builder
-	builder, err := buildfile.Convert(spec, f.context, convertOpts)
+	spec, err := buildfile.Parse(file, f.parameters)
 	if err != nil {
-		return fmt.Errorf("converting build file: %w", err)
+		return fail(err)
 	}
-
-	// Set up progress display
-	if f.verbosity != "error" && f.verbosity != "warn" {
-		layerCount := 0
-		if spec.Layers != nil {
-			layerCount = len(spec.Layers.Entries)
-		}
-		builder.OnProgress(newProgressWriter(layerCount))
-	}
-
-	// Determine target
-	var target *gib.Containerizer
-	if strings.HasPrefix(f.target, "tar://") {
-		tarPath := strings.TrimPrefix(f.target, "tar://")
-		var opts []gib.ContainerizerOption
-		if f.name != "" {
-			opts = append(opts, gib.WithTarImageName(f.name))
-		}
-		target = gib.ToTar(tarPath, opts...)
-	} else {
-		var opts []gib.ContainerizerOption
-		for _, tag := range f.additionalTags {
-			opts = append(opts, gib.WithAdditionalTag(tag))
-		}
-		if f.allowInsecureRegistries {
-			opts = append(opts, gib.WithAllowInsecureRegistries(true))
-		}
-		if f.sendCredentialsOverHTTP {
-			opts = append(opts, gib.WithSendCredentialsOverHTTP(true))
-		}
-
-		opts = append(opts, targetOptions(f.username, f.password, f.credentialHelper, f.toUsername, f.toPassword, f.toCredentialHelper)...)
-
-		target = gib.ToRegistry(f.target, opts...)
-	}
-
-	// Build
-	result, err := builder.Containerize(ctx, target)
+	builder, err := buildfile.Convert(spec, f.context, nil)
 	if err != nil {
-		return fmt.Errorf("build failed: %w", err)
+		return fail(err)
 	}
+	builder.ConfigureBaseImage(f.baseOptions(cmd.Flags().Changed)...)
+	layers := 0
+	if spec.Layers != nil {
+		layers = len(spec.Layers.Entries)
+	}
+	builder.OnLog(con.log).OnProgress(con.progress(layers))
 
-	// Output result
-	labelStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("6")).Bold(true)
-	valueStyle := lipgloss.NewStyle().Foreground(lipgloss.Color("7"))
-	_, _ = fmt.Fprintf(os.Stderr, "\n %s %s\n", labelStyle.Render("Built image:"), valueStyle.Render(result.TargetImage))
-	_, _ = fmt.Fprintf(os.Stderr, " %s %s\n", labelStyle.Render("Digest:"), valueStyle.Render(result.Digest.String()))
-	_, _ = fmt.Fprintf(os.Stderr, " %s %s\n", labelStyle.Render("Image ID:"), valueStyle.Render(result.ImageID.String()))
-
-	// Write metadata if requested
+	result, err := builder.Containerize(cmd.Context(), target)
+	con.done()
+	if err != nil {
+		return fail(err)
+	}
 	if f.imageMetadataOut != "" {
-		metadata := map[string]any{
-			"image":   result.TargetImage,
-			"digest":  result.Digest.String(),
-			"imageId": result.ImageID.String(),
-			"tags":    result.Tags,
-		}
-		data, err := json.MarshalIndent(metadata, "", "  ")
+		data, err := result.Metadata()
 		if err != nil {
-			return fmt.Errorf("marshaling metadata: %w", err)
+			return fail(err)
 		}
-		if err := os.WriteFile(f.imageMetadataOut, data, 0644); err != nil {
-			return fmt.Errorf("writing metadata: %w", err)
+		if err := os.WriteFile(f.imageMetadataOut, data, 0o644); err != nil {
+			return fail(err)
 		}
 	}
-
 	return nil
+}
+
+// message is the message of the error that ended a build: the one Jib
+// would print, when gib knows it.
+func message(err error) string {
+	var (
+		insecure  *gib.InsecureRegistryError
+		notSent   *gib.CredentialsNotSentError
+		notFound  *gib.HelperNotFoundError
+		missing   *gib.HelperMissingError
+		reference *gib.InvalidReferenceError
+	)
+	switch {
+	case errors.As(err, &insecure):
+		return insecure.Error()
+	case errors.As(err, &notSent):
+		return notSent.Error()
+	case errors.As(err, &notFound):
+		return notFound.Error()
+	case errors.As(err, &missing):
+		return missing.Error()
+	case errors.As(err, &reference):
+		return reference.Error()
+	}
+	return err.Error()
+}
+
+func readable(file string) bool {
+	r, err := os.Open(file)
+	if err != nil {
+		return false
+	}
+	_ = r.Close()
+	return true
+}
+
+// resolve is name in dir, as Java's Path.resolve spells it.
+func resolve(dir, name string) string {
+	if dir == "" {
+		return name
+	}
+	if d := strings.TrimRight(dir, "/"); d != "" {
+		return d + "/" + name
+	}
+	return "/" + name
+}
+
+// prompt reads each password given without a value from the console, as
+// picocli reads an interactive option's.
+func (f *buildFlags) prompt(cmd *cobra.Command, stdin io.Reader) error {
+	var lines *bufio.Reader
+	for _, p := range []struct {
+		name  string
+		value *string
+	}{{"password", &f.password}, {"to-password", &f.toPassword}, {"from-password", &f.fromPassword}} {
+		if *p.value != prompt {
+			continue
+		}
+		_, _ = fmt.Fprintf(cmd.OutOrStdout(), "Enter value for --%s (%s): ", p.name, passwordPrompts[p.name])
+		if in, ok := stdin.(*os.File); ok && term.IsTerminal(in.Fd()) {
+			b, err := term.ReadPassword(in.Fd())
+			_, _ = fmt.Fprintln(cmd.OutOrStdout())
+			if err != nil {
+				return err
+			}
+			*p.value = string(b)
+			continue
+		}
+		if lines == nil {
+			lines = bufio.NewReader(stdin)
+		}
+		line, err := lines.ReadString('\n')
+		if err != nil && line == "" {
+			*p.value = ""
+			continue
+		}
+		*p.value = strings.TrimRight(line, "\r\n")
+	}
+	return nil
+}
+
+const credentialGroups = "--credential-helper=<credential-helper> and [--username=<username> --password[=<password>]] and " +
+	"[[--to-credential-helper=<credential-helper> | [--to-username=<username> --to-password[=<password>]]] " +
+	"[--from-credential-helper=<credential-helper> | [--from-username=<username> --from-password[=<password>]]]]"
+
+// validate refuses what picocli refuses of a build's command line: a
+// missing target, credential options that exclude each other or lack
+// their pair, arguments that are no option's, and a tarball target
+// without --name.
+func (f *buildFlags) validate(cmd *cobra.Command, args, positional []string) error {
+	set := cmd.Flags().Changed
+	if !set("target") {
+		return usagef(cmd, "Missing required option: '--target=<target-image>'")
+	}
+	single := set("username") || set("password")
+	separate := false
+	for _, n := range []string{"to-credential-helper", "to-username", "to-password", "from-credential-helper", "from-username", "from-password"} {
+		separate = separate || set(n)
+	}
+	n := 0
+	for _, b := range []bool{set("credential-helper"), single, separate} {
+		if b {
+			n++
+		}
+	}
+	if n > 1 {
+		return usagef(cmd, "Error: %s are mutually exclusive (specify only one)", credentialGroups)
+	}
+	for _, prefix := range []string{"", "to-", "from-"} {
+		user, pass := set(prefix+"username"), set(prefix+"password")
+		if prefix != "" && set(prefix+"credential-helper") && (user || pass) {
+			return usagef(cmd, "Error: --%scredential-helper=<credential-helper> and [--%susername=<username> --%spassword[=<password>]] are mutually exclusive (specify only one)",
+				prefix, prefix, prefix)
+		}
+		if pass && !user {
+			return usagef(cmd, "Error: Missing required argument(s): --%susername=<username>", prefix)
+		}
+		if user && !pass {
+			return usagef(cmd, "Error: Missing required argument(s): --%spassword", prefix)
+		}
+	}
+	if len(positional) > 0 {
+		i := unmatched(cmd.Flags(), args)
+		if len(positional) == 1 {
+			return usagef(cmd, "Unmatched argument at index %d: '%s'", i, positional[0])
+		}
+		return usagef(cmd, "Unmatched arguments from index %d: '%s'", i, strings.Join(positional, "', '"))
+	}
+	if strings.HasPrefix(f.target, "tar://") && !set("name") {
+		return usagef(cmd, "Missing option: --name must be specified when using --target=tar://....")
+	}
+	return nil
+}
+
+// unmatched is the index in args of the first argument that is neither
+// the subcommand, an option nor an option's value.
+func unmatched(fs *pflag.FlagSet, args []string) int {
+	sub := false
+	for i := 0; i < len(args); i++ {
+		a := args[i]
+		switch {
+		case a == "--":
+			return i + 1
+		case strings.HasPrefix(a, "--"):
+			name, _, value := strings.Cut(a[2:], "=")
+			fl := fs.Lookup(name)
+			if fl == nil || value || fl.Value.Type() == "bool" {
+				continue
+			}
+			if fl.NoOptDefVal == "" || (i+1 < len(args) && !strings.HasPrefix(args[i+1], "-")) {
+				i++
+			}
+		case strings.HasPrefix(a, "-") && len(a) > 1:
+			fl := fs.ShorthandLookup(a[1:2])
+			if fl != nil && len(a) == 2 && fl.Value.Type() != "bool" {
+				i++
+			}
+		case !sub:
+			sub = true
+		default:
+			return i
+		}
+	}
+	return len(args)
+}
+
+// containerizer is the build's target, as Jib's Containerizers makes it.
+func (f *buildFlags) containerizer(con *console, mirrors []mirror, set func(string) bool) *gib.Containerizer {
+	opts := []gib.ContainerizerOption{
+		gib.WithLogHandler(con.log),
+		gib.WithAllowInsecureRegistries(f.allowInsecure),
+		gib.WithSendCredentialsOverHTTP(f.sendCredsOverHTTP),
+		gib.WithSerialize(f.serialize),
+	}
+	for _, t := range f.additionalTags {
+		opts = append(opts, gib.WithAdditionalTag(t))
+	}
+	for _, m := range mirrors {
+		opts = append(opts, gib.WithRegistryMirrors(m.Registry, m.Mirrors...))
+	}
+	switch f.httpTrace {
+	case "config":
+		opts = append(opts, gib.WithHTTPTrace(gib.TraceConfig, con.err))
+	case "all":
+		opts = append(opts, gib.WithHTTPTrace(gib.TraceAll, con.err))
+	}
+	switch {
+	case strings.HasPrefix(f.target, "docker://"):
+		return gib.ToDocker(strings.TrimPrefix(f.target, "docker://"), opts...)
+	case strings.HasPrefix(f.target, "tar://"):
+		return gib.ToTar(strings.TrimPrefix(f.target, "tar://"), append(opts, gib.WithTarImageName(f.name))...)
+	}
+	opts = append(opts, f.targetCredentials(set)...)
+	return gib.ToRegistry(f.target, opts...)
+}
+
+// baseOptions are the base image registry's credentials, as Jib's
+// Credentials.getFromCredentialRetrievers takes them.
+func (f *buildFlags) baseOptions(set func(string) bool) []gib.ImageSourceOption {
+	var opts []gib.ImageSourceOption
+	switch {
+	case set("username"):
+		opts = append(opts, gib.WithSourceCredential(gib.Credential{Username: f.username, Password: f.password}, "--username/--password"))
+	case set("from-username"):
+		opts = append(opts, gib.WithSourceCredential(gib.Credential{Username: f.fromUsername, Password: f.fromPassword}, "--from-username/--from-password"))
+	}
+	if h := f.credentialHelper + f.fromCredentialHelper; h != "" {
+		opts = append(opts, gib.WithSourceCredentialHelper(h))
+	}
+	return opts
 }
