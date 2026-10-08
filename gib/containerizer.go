@@ -2,10 +2,14 @@ package gib
 
 import (
 	"context"
+	"errors"
 	"fmt"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
+	"github.com/google/go-containerregistry/pkg/v1/types"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -108,15 +112,80 @@ func (c *Containerizer) Description() string {
 	}
 }
 
-func (c *Containerizer) write(ctx context.Context, image v1.Image) (*Container, error) {
+// write writes the images built, one per platform. A tarball holds one
+// image, as Jib's does; a registry takes several as their manifest list.
+func (c *Containerizer) write(ctx context.Context, images []v1.Image) (*Container, error) {
 	switch c.targetType {
 	case "registry":
-		return c.writeRegistry(ctx, image)
+		if len(images) > 1 {
+			return c.writeManifestList(ctx, images)
+		}
+		return c.writeRegistry(ctx, images[0])
 	case "tar":
-		return c.writeTar(image)
+		if len(images) > 1 {
+			return nil, errors.New("multi-platform image building not supported when building a local tar image")
+		}
+		return c.writeTar(images[0])
 	default:
 		return nil, fmt.Errorf("unknown target type: %s", c.targetType)
 	}
+}
+
+// writeManifestList pushes every image by its digest and, under the
+// target's tag and every additional tag, the manifest list naming each
+// with its platform, as Jib pushes a multi-platform image. Docker-format
+// images make a Docker manifest list; OCI-format images, for which Jib
+// builds none, an OCI image index. The list's digest is the container's
+// digest and its image ID, as Jib reports it.
+func (c *Containerizer) writeManifestList(ctx context.Context, images []v1.Image) (*Container, error) {
+	nameOpts := c.nameOptions()
+	ref, err := name.ParseReference(c.registryRef, nameOpts...)
+	if err != nil {
+		return nil, fmt.Errorf("invalid target reference %q: %w", c.registryRef, err)
+	}
+	opts := c.registryOptions(ctx)
+
+	listType := types.DockerManifestList
+	var adds []mutate.IndexAddendum
+	for _, img := range images {
+		mt, err := img.MediaType()
+		if err != nil {
+			return nil, err
+		}
+		if mt == types.OCIManifestSchema1 {
+			listType = types.OCIImageIndex
+		}
+		cfg, err := img.ConfigFile()
+		if err != nil {
+			return nil, err
+		}
+		adds = append(adds, mutate.IndexAddendum{Add: img, Descriptor: v1.Descriptor{
+			MediaType: mt,
+			Platform:  &v1.Platform{Architecture: cfg.Architecture, OS: cfg.OS},
+		}})
+	}
+	list := mutate.AppendManifests(mutate.IndexMediaType(empty.Index, listType), adds...)
+
+	tags := []string{ref.Identifier()}
+	tags = append(tags, c.additionalTags...)
+	for i, tag := range tags {
+		tagRef, err := name.NewTag(ref.Context().String()+":"+tag, nameOpts...)
+		if err != nil {
+			return nil, fmt.Errorf("invalid tag %q: %w", tag, err)
+		}
+		if err := remote.WriteIndex(tagRef, list, opts...); err != nil {
+			if i == 0 {
+				return nil, fmt.Errorf("pushing manifest list: %w", err)
+			}
+			return nil, fmt.Errorf("pushing additional tag %q: %w", tag, err)
+		}
+	}
+
+	digest, err := list.Digest()
+	if err != nil {
+		return nil, err
+	}
+	return &Container{Digest: digest, ImageID: digest, Tags: tags, TargetImage: ref.String()}, nil
 }
 
 func (c *Containerizer) nameOptions() []name.Option {

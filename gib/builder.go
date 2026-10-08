@@ -130,16 +130,17 @@ func (b *ContainerBuilder) AddPlatform(architecture, os string) *ContainerBuilde
 	return b
 }
 
-// platform is the one platform the image is built for: the one named,
+// targetPlatforms are the platforms images are built for: those named,
 // or linux/amd64, Jib's default, when none is.
-func (b *ContainerBuilder) platform() (v1.Platform, error) {
-	switch len(b.platforms) {
-	case 0:
-		return v1.Platform{OS: "linux", Architecture: "amd64"}, nil
-	case 1:
-		return v1.Platform{OS: b.platforms[0].OS, Architecture: b.platforms[0].Architecture}, nil
+func (b *ContainerBuilder) targetPlatforms() []v1.Platform {
+	if len(b.platforms) == 0 {
+		return []v1.Platform{{OS: "linux", Architecture: "amd64"}}
 	}
-	return v1.Platform{}, fmt.Errorf("%d platforms are named, and gib builds an image for one", len(b.platforms))
+	out := make([]v1.Platform, len(b.platforms))
+	for i, p := range b.platforms {
+		out[i] = v1.Platform{OS: p.OS, Architecture: p.Architecture}
+	}
+	return out
 }
 
 // GetPlatforms returns the configured target platforms.
@@ -169,12 +170,7 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 
 	b.emitProgress(PhasePullingBase, fmt.Sprintf("Pulling base image %s...", b.source.description()))
 
-	platform, err := b.platform()
-	if err != nil {
-		return nil, &BuildError{Message: "choosing the platform", Cause: err}
-	}
-
-	baseImage, err := b.source.resolve(ctx, platform)
+	bases, err := b.source.resolve(ctx, b.targetPlatforms())
 	if err != nil {
 		return nil, &BuildError{Message: "failed to resolve base image", Cause: err}
 	}
@@ -217,7 +213,6 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 	}
 
 	req := build.Request{
-		BaseImage:        baseImage,
 		Layers:           v1Layers,
 		Entrypoint:       b.entrypoint,
 		ProgramArguments: b.programArguments,
@@ -229,19 +224,24 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 		WorkingDirectory: b.workingDirectory,
 		CreationTimeMs:   b.creationTime,
 		MediaType:        mediaType,
-		Platform:         platform,
 	}
 
 	b.emitProgress(PhaseBuildingImage, "Building image...")
 
-	image, err := build.Execute(ctx, req)
-	if err != nil {
-		return nil, &BuildError{Message: "build failed", Cause: err}
+	// One image per base: one per platform built for.
+	images := make([]v1.Image, len(bases))
+	for i, base := range bases {
+		req.BaseImage, req.Platform = base.image, base.platform
+		image, err := build.Execute(ctx, req)
+		if err != nil {
+			return nil, &BuildError{Message: "build failed", Cause: err}
+		}
+		images[i] = image
 	}
 
 	b.emitProgress(PhaseWriting, fmt.Sprintf("Writing to %s...", target.Description()))
 
-	result, err := target.write(ctx, image)
+	result, err := target.write(ctx, images)
 	if err != nil {
 		return nil, err
 	}

@@ -25,8 +25,8 @@ type Request struct {
 	WorkingDirectory string
 	CreationTimeMs   *int64 // millis since epoch
 	MediaType        types.MediaType
-	// Platform is what the image runs on. A base whose config names no
-	// platform, such as scratch, takes it; one naming another is refused.
+	// Platform is what the image is built for. A base whose config names
+	// no platform, such as scratch, takes it; any other keeps its own.
 	Platform v1.Platform
 }
 
@@ -50,11 +50,11 @@ func Execute(_ context.Context, req Request) (v1.Image, error) {
 	}
 	cfg = cfg.DeepCopy()
 
-	switch {
-	case cfg.OS == "" && cfg.Architecture == "":
+	// As Jib does, a base that says what it runs on keeps it, whatever
+	// the build file names; one that does not, such as scratch, takes
+	// the platform the image is built for.
+	if cfg.OS == "" && cfg.Architecture == "" {
 		cfg.OS, cfg.Architecture, cfg.Variant = req.Platform.OS, req.Platform.Architecture, req.Platform.Variant
-	case req.Platform.OS != "" && (cfg.OS != req.Platform.OS || cfg.Architecture != req.Platform.Architecture):
-		return nil, fmt.Errorf("the base image is %s/%s, not the %s/%s the image is built for", cfg.OS, cfg.Architecture, req.Platform.OS, req.Platform.Architecture)
 	}
 
 	if req.Entrypoint != nil {
