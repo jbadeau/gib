@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 )
 
 // FileEntry represents a single file to add to a layer.
@@ -16,8 +17,8 @@ type FileEntry struct {
 	DestinationPath string
 	// Permissions are the file permissions (e.g., 0644).
 	Permissions fs.FileMode
-	// ModificationTime is the modification timestamp in milliseconds since epoch.
-	ModificationTime int64
+	// ModificationTime is when the file was last modified.
+	ModificationTime time.Time
 	// Ownership is the user:group ownership string (e.g., "0:0").
 	Ownership string
 }
@@ -59,7 +60,7 @@ func (b *FileEntriesLayerBuilder) AddEntryWithPermissions(src, dest string, perm
 		SourcePath:       src,
 		DestinationPath:  dest,
 		Permissions:      perm,
-		ModificationTime: 1000, // epoch + 1 second in millis
+		ModificationTime: time.Unix(1, 0), // Jib's default, a second past the epoch
 		Ownership:        "0:0",
 	})
 	return b
@@ -99,7 +100,7 @@ func (b *FileEntriesLayerBuilder) AddEntryRecursiveWithPermissions(srcDir, destD
 			SourcePath:       path,
 			DestinationPath:  destPath,
 			Permissions:      perm,
-			ModificationTime: 1000,
+			ModificationTime: time.Unix(1, 0),
 			Ownership:        "0:0",
 		})
 		return nil

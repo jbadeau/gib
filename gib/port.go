@@ -2,8 +2,8 @@ package gib
 
 import (
 	"fmt"
+	"regexp"
 	"strconv"
-	"strings"
 )
 
 // Port represents a container port with optional protocol.
@@ -21,22 +21,48 @@ func (p Port) String() string {
 	return fmt.Sprintf("%d/%s", p.Number, proto)
 }
 
-// ParsePort parses a port string like "8080", "8080/tcp", or "8080/udp".
-func ParsePort(s string) (Port, error) {
-	parts := strings.SplitN(s, "/", 2)
-	n, err := strconv.Atoi(parts[0])
+var portPattern = regexp.MustCompile(`^([0-9]+)(?:-([0-9]+))?(?:/(tcp|udp))?$`)
+
+// ParsePorts parses a port as Jib's Ports.parse does: a number or a
+// range of two, "8000-8002", either optionally followed by "/tcp" or
+// "/udp"; a range gives each port in it.
+func ParsePorts(s string) ([]Port, error) {
+	m := portPattern.FindStringSubmatch(s)
+	if m == nil {
+		return nil, fmt.Errorf("Invalid port configuration: '%s'. Make sure the port is a single number or a range of two numbers separated with a '-', with or without protocol specified (e.g. '<portNum>/tcp' or '<portNum>/udp').", s) //nolint:staticcheck // Jib's message
+	}
+	lo, err := javaInt(m[1])
 	if err != nil {
-		return Port{}, fmt.Errorf("invalid port number %q: %w", parts[0], err)
+		return nil, err
 	}
-	if n < 1 || n > 65535 {
-		return Port{}, fmt.Errorf("port number %d out of range (1-65535)", n)
-	}
-	proto := "tcp"
-	if len(parts) == 2 {
-		proto = strings.ToLower(parts[1])
-		if proto != "tcp" && proto != "udp" {
-			return Port{}, fmt.Errorf("unsupported protocol %q (must be tcp or udp)", proto)
+	hi := lo
+	if m[2] != "" {
+		if hi, err = javaInt(m[2]); err != nil {
+			return nil, err
 		}
 	}
-	return Port{Number: n, Protocol: proto}, nil
+	if lo > hi {
+		return nil, fmt.Errorf("Invalid port range '%s'; smaller number must come first.", s) //nolint:staticcheck // Jib's message
+	}
+	if lo < 1 || hi > 65535 {
+		return nil, fmt.Errorf("Port number '%s' is out of usual range (1-65535).", s) //nolint:staticcheck // Jib's message
+	}
+	proto := "tcp"
+	if m[3] != "" {
+		proto = m[3]
+	}
+	var out []Port
+	for n := lo; n <= hi; n++ {
+		out = append(out, Port{Number: n, Protocol: proto})
+	}
+	return out, nil
+}
+
+// javaInt is Integer.parseInt of decimal digits.
+func javaInt(s string) (int, error) {
+	n, err := strconv.ParseInt(s, 10, 32)
+	if err != nil {
+		return 0, fmt.Errorf("For input string: \"%s\"", s) //nolint:staticcheck // Java's message
+	}
+	return int(n), nil
 }

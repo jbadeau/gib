@@ -1,0 +1,3 @@
+{
+  "error": "java.lang.NullPointerException: Cannot invoke \"com.google.cloud.tools.jib.cli.buildfile.CopySpec.getProperties()\" because \"copySpec\" is null"
+}

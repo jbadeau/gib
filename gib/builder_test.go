@@ -4,6 +4,7 @@ import (
 	"context"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
 	"github.com/stretchr/testify/assert"
@@ -74,9 +75,9 @@ func TestContainerBuilder_SetWorkingDirectory(t *testing.T) {
 }
 
 func TestContainerBuilder_SetCreationTime(t *testing.T) {
-	b := FromScratch().SetCreationTime(2000)
+	b := FromScratch().SetCreationTime(time.UnixMilli(2000))
 	assert.NotNil(t, b.creationTime)
-	assert.Equal(t, int64(2000), *b.creationTime)
+	assert.Equal(t, time.UnixMilli(2000), *b.creationTime)
 }
 
 func TestContainerBuilder_SetFormat(t *testing.T) {

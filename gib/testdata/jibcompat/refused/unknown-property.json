@@ -1,0 +1,3 @@
+{
+  "error": "com.fasterxml.jackson.databind.exc.UnrecognizedPropertyException: Unrecognized field \"entryPoint\" (class com.google.cloud.tools.jib.cli.buildfile.BuildFileSpec), not marked as ignorable (14 known properties: \"layers\", \"from\", \"user\", \"creationTime\", \"exposedPorts\", \"environment\", \"kind\", \"format\", \"volumes\", \"cmd\", \"workingDirectory\", \"apiVersion\", \"labels\", \"entrypoint\"])"
+}

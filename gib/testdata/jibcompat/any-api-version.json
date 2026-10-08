@@ -1,0 +1,22 @@
+{
+  "manifestMediaType": "application/vnd.docker.distribution.manifest.v2+json",
+  "configMediaType": "application/vnd.docker.container.image.v1+json",
+  "layerMediaTypes": null,
+  "architecture": "amd64",
+  "os": "linux",
+  "created": "1970-01-01T00:00:00Z",
+  "config": {
+    "env": null,
+    "entrypoint": null,
+    "cmd": null,
+    "labels": null,
+    "exposedPorts": null,
+    "volumes": null,
+    "user": "1",
+    "workingDir": "",
+    "healthcheck": null,
+    "other": null
+  },
+  "history": null,
+  "layers": null
+}

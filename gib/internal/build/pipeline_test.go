@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"testing"
+	"time"
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/empty"
@@ -142,11 +143,11 @@ func TestExecute_TarRoundtrip(t *testing.T) {
 }
 
 func TestExecute_CreationTime(t *testing.T) {
-	ms := int64(1577836800000) // 2020-01-01T00:00:00Z
+	created := time.Date(2020, 1, 1, 0, 0, 0, 123456789, time.UTC)
 	req := Request{
-		BaseImage:      empty.Image,
-		CreationTimeMs: &ms,
-		MediaType:      types.DockerManifestSchema2,
+		BaseImage:    empty.Image,
+		CreationTime: &created,
+		MediaType:    types.DockerManifestSchema2,
 	}
 
 	image, err := Execute(context.Background(), req)
@@ -155,7 +156,7 @@ func TestExecute_CreationTime(t *testing.T) {
 	cfg, err := image.ConfigFile()
 	require.NoError(t, err)
 
-	assert.Equal(t, int64(1577836800), cfg.Created.Unix())
+	assert.Equal(t, created, cfg.Created.Time, "nanoseconds kept, as Instant keeps them")
 }
 
 func TestExecute_OCIFormat(t *testing.T) {

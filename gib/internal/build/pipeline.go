@@ -30,7 +30,7 @@ type Request struct {
 	Volumes          []string
 	User             string
 	WorkingDirectory string
-	CreationTimeMs   *int64 // millis since epoch; nil is the epoch
+	CreationTime     *time.Time // nil is the epoch
 	MediaType        types.MediaType
 	// Platform is what the image is built for. A base whose config names
 	// no platform, such as scratch, takes it; any other keeps its own.
@@ -55,9 +55,8 @@ func Execute(_ context.Context, req Request) (v1.Image, error) {
 		return nil, fmt.Errorf("reading the base layers: %w", err)
 	}
 	created := time.Unix(0, 0).UTC()
-	if req.CreationTimeMs != nil {
-		ms := *req.CreationTimeMs
-		created = time.Unix(ms/1000, (ms%1000)*int64(time.Millisecond)).UTC()
+	if req.CreationTime != nil {
+		created = req.CreationTime.UTC()
 	}
 
 	cfg := v1.ConfigFile{

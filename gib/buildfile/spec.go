@@ -1,62 +1,67 @@
 package buildfile
 
-// BuildFileSpec represents a jib.yaml build file.
+// BuildFileSpec represents a jib.yaml build file. An empty string is a
+// property the build file does not set; Parse refuses an empty one it
+// does set, as Jib does.
 type BuildFileSpec struct {
-	APIVersion       string            `yaml:"apiVersion"`
-	Kind             string            `yaml:"kind"`
-	From             *BaseImageSpec    `yaml:"from,omitempty"`
-	CreationTime     string            `yaml:"creationTime,omitempty"`
-	Format           string            `yaml:"format,omitempty"`
-	Environment      map[string]string `yaml:"environment,omitempty"`
-	Labels           map[string]string `yaml:"labels,omitempty"`
-	Volumes          []string          `yaml:"volumes,omitempty"`
-	ExposedPorts     []string          `yaml:"exposedPorts,omitempty"`
-	User             string            `yaml:"user,omitempty"`
-	WorkingDirectory string            `yaml:"workingDirectory,omitempty"`
-	Entrypoint       []string          `yaml:"entrypoint,omitempty"`
-	Cmd              []string          `yaml:"cmd,omitempty"`
-	Layers           *LayersSpec       `yaml:"layers,omitempty"`
+	APIVersion       string
+	Kind             string
+	From             *BaseImageSpec
+	CreationTime     string
+	Format           string
+	Environment      map[string]string
+	Labels           map[string]string
+	Volumes          []string
+	ExposedPorts     []string
+	User             string
+	WorkingDirectory string
+	Entrypoint       []string // nil is unset; empty is set to nothing
+	Cmd              []string // nil is unset; empty is set to nothing
+	Layers           *LayersSpec
 }
 
 // BaseImageSpec specifies the base image.
 type BaseImageSpec struct {
-	Image     string         `yaml:"image,omitempty"`
-	Platforms []PlatformSpec `yaml:"platforms,omitempty"`
+	Image     string
+	Platforms []PlatformSpec
 }
 
 // PlatformSpec specifies a target platform.
 type PlatformSpec struct {
-	Architecture string `yaml:"architecture"`
-	OS           string `yaml:"os"`
+	Architecture string
+	OS           string
 }
 
 // LayersSpec specifies layers to add.
 type LayersSpec struct {
-	Properties *FilePropertiesSpec `yaml:"properties,omitempty"`
-	Entries    []LayerEntrySpec    `yaml:"entries,omitempty"`
+	Properties *FilePropertiesSpec
+	Entries    []LayerEntrySpec
 }
 
-// LayerEntrySpec specifies a single layer.
+// LayerEntrySpec specifies a single layer: a file layer, which has
+// files, or an archive layer, which Jib reads but does not build.
 type LayerEntrySpec struct {
-	Name       string              `yaml:"name,omitempty"`
-	Properties *FilePropertiesSpec `yaml:"properties,omitempty"`
-	Files      []CopyDirective     `yaml:"files,omitempty"`
+	Name       string
+	Properties *FilePropertiesSpec
+	Files      []CopyDirective
+	Archive    string
+	MediaType  string
 }
 
 // CopyDirective specifies files to copy into a layer.
 type CopyDirective struct {
-	Src        string              `yaml:"src"`
-	Dest       string              `yaml:"dest"`
-	Excludes   []string            `yaml:"excludes,omitempty"`
-	Includes   []string            `yaml:"includes,omitempty"`
-	Properties *FilePropertiesSpec `yaml:"properties,omitempty"`
+	Src        string
+	Dest       string
+	Excludes   []string
+	Includes   []string
+	Properties *FilePropertiesSpec
 }
 
 // FilePropertiesSpec specifies file properties.
 type FilePropertiesSpec struct {
-	FilePermissions      string `yaml:"filePermissions,omitempty"`
-	DirectoryPermissions string `yaml:"directoryPermissions,omitempty"`
-	User                 string `yaml:"user,omitempty"`
-	Group                string `yaml:"group,omitempty"`
-	Timestamp            string `yaml:"timestamp,omitempty"`
+	FilePermissions      string
+	DirectoryPermissions string
+	User                 string
+	Group                string
+	Timestamp            string
 }

@@ -1,5 +1,7 @@
 package gib
 
+import "fmt"
+
 // ImageFormat represents the output image format.
 type ImageFormat int
 
@@ -20,12 +22,14 @@ func (f ImageFormat) String() string {
 	}
 }
 
-// ParseImageFormat parses a string into an ImageFormat.
-func ParseImageFormat(s string) ImageFormat {
+// ParseImageFormat parses a format as Jib's ImageFormat.valueOf does:
+// "Docker" or "OCI", exactly.
+func ParseImageFormat(s string) (ImageFormat, error) {
 	switch s {
+	case "Docker":
+		return DockerFormat, nil
 	case "OCI":
-		return OCIFormat
-	default:
-		return DockerFormat
+		return OCIFormat, nil
 	}
+	return 0, fmt.Errorf("No enum constant com.google.cloud.tools.jib.api.buildplan.ImageFormat.%s", s) //nolint:staticcheck // Java's message
 }

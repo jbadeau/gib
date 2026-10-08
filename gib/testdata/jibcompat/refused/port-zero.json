@@ -1,0 +1,3 @@
+{
+  "error": "com.fasterxml.jackson.databind.exc.ValueInstantiationException: Cannot construct instance of `com.google.cloud.tools.jib.cli.buildfile.BuildFileSpec`, problem: Port number '0' is out of usual range (1-65535)."
+}
