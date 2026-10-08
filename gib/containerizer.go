@@ -6,7 +6,6 @@ import (
 
 	v1 "github.com/google/go-containerregistry/pkg/v1"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
-	"github.com/google/go-containerregistry/pkg/v1/tarball"
 
 	"github.com/google/go-containerregistry/pkg/authn"
 	"github.com/google/go-containerregistry/pkg/name"
@@ -135,24 +134,7 @@ func (c *Containerizer) writeRegistry(ctx context.Context, image v1.Image) (*Con
 		return nil, fmt.Errorf("invalid target reference %q: %w", c.registryRef, err)
 	}
 
-	opts := []remote.Option{remote.WithContext(ctx)}
-
-	// Set up authentication (priority: explicit creds > credential helper > default keychain)
-	if c.username != "" && c.password != "" {
-		opts = append(opts, remote.WithAuth(&authn.Basic{
-			Username: c.username,
-			Password: c.password,
-		}))
-	} else if c.credentialHelper != "" {
-		kc := newCredentialHelperKeychain(c.credentialHelper)
-		opts = append(opts, remote.WithAuthFromKeychain(
-			authn.NewMultiKeychain(kc, authn.DefaultKeychain),
-		))
-	} else {
-		opts = append(opts, remote.WithAuthFromKeychain(authn.DefaultKeychain))
-	}
-
-	opts = append(opts, c.remoteOptions...)
+	opts := c.registryOptions(ctx)
 
 	// Push the image
 	if err := remote.Write(ref, image, opts...); err != nil {
@@ -190,6 +172,23 @@ func (c *Containerizer) writeRegistry(ctx context.Context, image v1.Image) (*Con
 	}, nil
 }
 
+// registryOptions are the options every request to the target registry
+// carries: its credentials, explicit ones first, then the credential
+// helper, then the default keychain (Docker's config.json).
+func (c *Containerizer) registryOptions(ctx context.Context) []remote.Option {
+	opts := []remote.Option{remote.WithContext(ctx)}
+	switch {
+	case c.username != "" && c.password != "":
+		opts = append(opts, remote.WithAuth(&authn.Basic{Username: c.username, Password: c.password}))
+	case c.credentialHelper != "":
+		kc := newCredentialHelperKeychain(c.credentialHelper)
+		opts = append(opts, remote.WithAuthFromKeychain(authn.NewMultiKeychain(kc, authn.DefaultKeychain)))
+	default:
+		opts = append(opts, remote.WithAuthFromKeychain(authn.DefaultKeychain))
+	}
+	return append(opts, c.remoteOptions...)
+}
+
 func (c *Containerizer) writeTar(image v1.Image) (*Container, error) {
 	var ref name.Reference
 	var err error
@@ -200,7 +199,7 @@ func (c *Containerizer) writeTar(image v1.Image) (*Container, error) {
 		}
 	}
 
-	var tag name.Tag
+	tag, _ := name.NewTag("gib/image:latest")
 	if ref != nil {
 		if t, ok := ref.(name.Tag); ok {
 			tag = t
@@ -210,14 +209,9 @@ func (c *Containerizer) writeTar(image v1.Image) (*Container, error) {
 				return nil, fmt.Errorf("invalid tag from reference %q: %w", ref.String(), err)
 			}
 		}
-		if err := tarball.WriteToFile(c.tarPath, tag, image); err != nil {
-			return nil, fmt.Errorf("writing tar: %w", err)
-		}
-	} else {
-		tag, _ = name.NewTag("gib/image:latest")
-		if err := tarball.WriteToFile(c.tarPath, tag, image); err != nil {
-			return nil, fmt.Errorf("writing tar: %w", err)
-		}
+	}
+	if err := writeImageTar(c.tarPath, tag, image); err != nil {
+		return nil, fmt.Errorf("writing tar: %w", err)
 	}
 
 	digest, err := image.Digest()
