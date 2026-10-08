@@ -128,11 +128,10 @@ func TestContainerBuilder_Platform(t *testing.T) {
 		name      string
 		platforms [][2]string
 		want      string
-		err       string
 	}{
 		{name: "none is Jib's default", want: "linux/amd64"},
 		{name: "the one named", platforms: [][2]string{{"arm64", "linux"}}, want: "linux/arm64"},
-		{name: "several are refused", platforms: [][2]string{{"arm64", "linux"}, {"amd64", "linux"}}, err: "2 platforms are named"},
+		{name: "several build as if none were named", platforms: [][2]string{{"arm64", "linux"}, {"amd64", "linux"}}, want: "linux/amd64"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -142,10 +141,6 @@ func TestContainerBuilder_Platform(t *testing.T) {
 			}
 			tarPath := filepath.Join(t.TempDir(), "image.tar")
 			_, err := b.Containerize(context.Background(), ToTar(tarPath, WithTarImageName("app")))
-			if tt.err != "" {
-				require.ErrorContains(t, err, tt.err)
-				return
-			}
 			require.NoError(t, err)
 			image, err := tarball.ImageFromPath(tarPath, nil)
 			require.NoError(t, err)
@@ -154,4 +149,24 @@ func TestContainerBuilder_Platform(t *testing.T) {
 			assert.Equal(t, tt.want, cfg.OS+"/"+cfg.Architecture)
 		})
 	}
+}
+
+// A base tarball built for another platform than Jib's default is used
+// as it is when the build file names no platform, as gib 0.1.1 and Jib
+// do.
+func TestContainerBuilder_ATarBaseKeepsItsPlatform(t *testing.T) {
+	dir := t.TempDir()
+	base := filepath.Join(dir, "base.tar")
+	_, err := FromScratch().AddPlatform("arm64", "linux").Containerize(context.Background(), ToTar(base, WithTarImageName("base")))
+	require.NoError(t, err)
+
+	image := filepath.Join(dir, "image.tar")
+	_, err = FromImage(TarSource(base)).SetEntrypoint("/app").Containerize(context.Background(), ToTar(image, WithTarImageName("app")))
+	require.NoError(t, err)
+
+	img, err := tarball.ImageFromPath(image, nil)
+	require.NoError(t, err)
+	cfg, err := img.ConfigFile()
+	require.NoError(t, err)
+	assert.Equal(t, "linux/arm64", cfg.OS+"/"+cfg.Architecture)
 }

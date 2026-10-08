@@ -130,16 +130,14 @@ func (b *ContainerBuilder) AddPlatform(architecture, os string) *ContainerBuilde
 	return b
 }
 
-// platform is the one platform the image is built for: the one named,
-// or linux/amd64, Jib's default, when none is.
-func (b *ContainerBuilder) platform() (v1.Platform, error) {
-	switch len(b.platforms) {
-	case 0:
-		return v1.Platform{OS: "linux", Architecture: "amd64"}, nil
-	case 1:
-		return v1.Platform{OS: b.platforms[0].OS, Architecture: b.platforms[0].Architecture}, nil
+// platform is the platform the image is built for: the one named, or
+// linux/amd64, Jib's default, when none is. Several name none gib can
+// build for one image, so it builds as if none were named.
+func (b *ContainerBuilder) platform() v1.Platform {
+	if len(b.platforms) == 1 {
+		return v1.Platform{OS: b.platforms[0].OS, Architecture: b.platforms[0].Architecture}
 	}
-	return v1.Platform{}, fmt.Errorf("%d platforms are named, and gib builds an image for one", len(b.platforms))
+	return v1.Platform{OS: "linux", Architecture: "amd64"}
 }
 
 // GetPlatforms returns the configured target platforms.
@@ -169,10 +167,7 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 
 	b.emitProgress(PhasePullingBase, fmt.Sprintf("Pulling base image %s...", b.source.description()))
 
-	platform, err := b.platform()
-	if err != nil {
-		return nil, &BuildError{Message: "choosing the platform", Cause: err}
-	}
+	platform := b.platform()
 
 	baseImage, err := b.source.resolve(ctx, platform)
 	if err != nil {

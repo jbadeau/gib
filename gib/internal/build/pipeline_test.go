@@ -182,19 +182,14 @@ func TestExecute_Platform(t *testing.T) {
 		base     v1.Image
 		platform v1.Platform
 		want     v1.Platform
-		err      string
 	}{
 		{name: "scratch takes the platform", base: empty.Image, platform: arm64, want: arm64},
 		{name: "a base keeps its own", base: amd64Base, platform: v1.Platform{OS: "linux", Architecture: "amd64"}, want: v1.Platform{OS: "linux", Architecture: "amd64"}},
-		{name: "a base of another platform is refused", base: amd64Base, platform: arm64, err: "the base image is linux/amd64, not the linux/arm64"},
+		{name: "a base of another platform keeps its own", base: amd64Base, platform: arm64, want: v1.Platform{OS: "linux", Architecture: "amd64"}},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			image, err := Execute(context.Background(), Request{BaseImage: tt.base, Platform: tt.platform})
-			if tt.err != "" {
-				require.ErrorContains(t, err, tt.err)
-				return
-			}
 			require.NoError(t, err)
 			cfg, err := image.ConfigFile()
 			require.NoError(t, err)
