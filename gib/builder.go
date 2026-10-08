@@ -192,7 +192,7 @@ func (b *ContainerBuilder) Containerize(ctx context.Context, target *Containeriz
 				SourcePath:       e.SourcePath,
 				DestinationPath:  e.DestinationPath,
 				Permissions:      e.Permissions,
-				ModificationTime: e.ModificationTime.UnixMilli(),
+				ModificationTime: e.ModificationTime,
 				Ownership:        e.Ownership,
 			}
 		}

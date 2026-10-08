@@ -27,7 +27,7 @@ func TestExecute_FromScratch_WithLayers(t *testing.T) {
 	dir := testdataDir(t)
 
 	entries := []layer.Entry{
-		{SourcePath: filepath.Join(dir, "foo"), DestinationPath: "/app/foo", Permissions: 0644, ModificationTime: 1000, Ownership: "0:0"},
+		{SourcePath: filepath.Join(dir, "foo"), DestinationPath: "/app/foo", Permissions: 0644, ModificationTime: time.UnixMilli(1000), Ownership: "0:0"},
 	}
 
 	l, err := layer.BuildReproducibleLayer(entries)
@@ -71,8 +71,8 @@ func TestExecute_TarRoundtrip(t *testing.T) {
 	dir := testdataDir(t)
 
 	entries := []layer.Entry{
-		{SourcePath: filepath.Join(dir, "foo"), DestinationPath: "/app/foo", Permissions: 0644, ModificationTime: 1000, Ownership: "0:0"},
-		{SourcePath: filepath.Join(dir, "a/b/bar"), DestinationPath: "/app/bar", Permissions: 0755, ModificationTime: 1000, Ownership: "0:0"},
+		{SourcePath: filepath.Join(dir, "foo"), DestinationPath: "/app/foo", Permissions: 0644, ModificationTime: time.UnixMilli(1000), Ownership: "0:0"},
+		{SourcePath: filepath.Join(dir, "a/b/bar"), DestinationPath: "/app/bar", Permissions: 0755, ModificationTime: time.UnixMilli(1000), Ownership: "0:0"},
 	}
 
 	l, err := layer.BuildReproducibleLayer(entries)

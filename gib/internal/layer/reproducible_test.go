@@ -9,6 +9,7 @@ import (
 	"strings"
 	"syscall"
 	"testing"
+	"time"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -17,17 +18,17 @@ import (
 // These hold the layer's rules one at a time; what layers hold, against
 // layers Jib built, is TestJibCompat's.
 
-func TestTimesAreKeptToTheMillisecond(t *testing.T) {
+func TestTimesAreKeptToTheNanosecond(t *testing.T) {
 	dir := t.TempDir()
 	f := filepath.Join(dir, "f")
 	require.NoError(t, os.WriteFile(f, []byte("x"), 0o644))
 
-	raw, err := Tar([]Entry{{SourcePath: f, DestinationPath: "/f", ModificationTime: 1050}})
+	raw, err := Tar([]Entry{{SourcePath: f, DestinationPath: "/f", ModificationTime: time.Unix(1, 50_000_007)}})
 	require.NoError(t, err)
 
 	h, err := tar.NewReader(bytes.NewReader(raw)).Next()
 	require.NoError(t, err)
-	assert.Equal(t, int64(1_050_000_000), h.ModTime.UnixNano())
+	assert.Equal(t, int64(1_050_000_007), h.ModTime.UnixNano())
 }
 
 func TestLongNamesAreKept(t *testing.T) {
@@ -79,7 +80,7 @@ func TestEntriesAreRelativeAndTyped(t *testing.T) {
 	f := filepath.Join(dir, "f")
 	require.NoError(t, os.WriteFile(f, []byte("x"), 0o600))
 
-	raw, err := Tar([]Entry{{SourcePath: f, DestinationPath: "/app/bin/f", Permissions: 0o750, ModificationTime: 1000}})
+	raw, err := Tar([]Entry{{SourcePath: f, DestinationPath: "/app/bin/f", Permissions: 0o750, ModificationTime: time.UnixMilli(1000)}})
 	require.NoError(t, err)
 
 	r := tar.NewReader(bytes.NewReader(raw))
