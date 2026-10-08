@@ -256,9 +256,10 @@ func anyMatch(ms []pathMatcher, p string) bool {
 }
 
 // walk lists root and everything beneath it as Java's Files.walk does:
-// depth first, a directory before what it holds, each directory's
-// entries in the order its file system lists them, and a symbolic link
-// listed but not followed.
+// depth first, a directory before what it holds, and a symbolic link
+// listed but not followed. Each directory's entries come sorted by name,
+// one of the orders Files.walk may list them in and the same on every
+// file system, so the same files are always the same layer.
 func walk(root string) ([]string, error) {
 	out := []string{root}
 	fi, err := os.Lstat(root)
@@ -267,12 +268,7 @@ func walk(root string) ([]string, error) {
 	}
 	var visit func(dir string) error
 	visit = func(dir string) error {
-		f, err := os.Open(dir)
-		if err != nil {
-			return err
-		}
-		entries, err := f.ReadDir(-1)
-		_ = f.Close()
+		entries, err := os.ReadDir(dir)
 		if err != nil {
 			return err
 		}
