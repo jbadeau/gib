@@ -15,6 +15,8 @@ import (
 
 	"github.com/google/go-containerregistry/pkg/name"
 	v1 "github.com/google/go-containerregistry/pkg/v1"
+	"github.com/google/go-containerregistry/pkg/v1/empty"
+	"github.com/google/go-containerregistry/pkg/v1/mutate"
 	"github.com/google/go-containerregistry/pkg/v1/partial"
 	"github.com/google/go-containerregistry/pkg/v1/remote"
 	"github.com/google/go-containerregistry/pkg/v1/tarball"
@@ -42,25 +44,10 @@ const refName = "org.opencontainers.image.ref.name"
 // refused unless exactly one of them is tagged in the reference's
 // repository.
 func (c *Containerizer) Push(ctx context.Context, tarPath string) (*Container, error) {
-	if c.targetType != "registry" {
-		return nil, fmt.Errorf("push needs a registry target, not %s", c.targetType)
-	}
-	jref, err := parseReference(c.registryRef)
+	tag, err := c.pushTag()
 	if err != nil {
 		return nil, err
 	}
-	if err := c.creds.check(); err != nil {
-		return nil, err
-	}
-	ref, err := name.ParseReference(c.registryRef, c.nameOptions()...)
-	if err != nil {
-		return nil, fmt.Errorf("invalid target reference %q: %w", c.registryRef, err)
-	}
-	tag, ok := ref.(name.Tag)
-	if !ok {
-		return nil, fmt.Errorf("target reference %q names a digest; a push names a tag, the digest is the tarball's", c.registryRef)
-	}
-
 	a, err := openArchive(tarPath)
 	if err != nil {
 		return nil, err
@@ -71,7 +58,98 @@ func (c *Containerizer) Push(ctx context.Context, tarPath string) (*Container, e
 	if err != nil {
 		return nil, fmt.Errorf("%s: %w", tarPath, err)
 	}
+	return c.writeTagged(ctx, tag, t, tarPath)
+}
 
+// PushIndex pushes the images several tarballs hold as one image index
+// tagged with the containerizer's reference: each tarball one image for
+// one platform, as a build for that platform writes it, pushed with its
+// exact bytes, and the index naming each by its platform, in the order
+// the tarballs are given. The images' platforms are read from their
+// configs, and two images for one platform are refused. Images in the
+// Docker format make a Docker manifest list, OCI images an OCI index;
+// a mix of the two is refused.
+func (c *Containerizer) PushIndex(ctx context.Context, tarPaths []string) (*Container, error) {
+	tag, err := c.pushTag()
+	if err != nil {
+		return nil, err
+	}
+	var adds []mutate.IndexAddendum
+	var kind types.MediaType
+	seen := map[string]string{}
+	for _, p := range tarPaths {
+		a, err := openArchive(p)
+		if err != nil {
+			return nil, err
+		}
+		defer func() { _ = a.f.Close() }()
+		t, err := a.taggable(tag)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", p, err)
+		}
+		img, ok := t.(v1.Image)
+		if !ok {
+			return nil, fmt.Errorf("%s holds an index; an index is built of tarballs of one image each", p)
+		}
+		mt, err := img.MediaType()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", p, err)
+		}
+		list := types.OCIImageIndex
+		if mt == types.DockerManifestSchema2 {
+			list = types.DockerManifestList
+		}
+		if kind != "" && kind != list {
+			return nil, fmt.Errorf("%s is a %s, where the tarballs before it are not: an index holds images of one format", p, mt)
+		}
+		kind = list
+		cfg, err := img.ConfigFile()
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", p, err)
+		}
+		pl := v1.Platform{OS: cfg.OS, Architecture: cfg.Architecture, Variant: cfg.Variant, OSVersion: cfg.OSVersion}
+		if pl.OS == "" || pl.Architecture == "" {
+			return nil, fmt.Errorf("%s: its config names no platform", p)
+		}
+		if prev, dup := seen[pl.String()]; dup {
+			return nil, fmt.Errorf("%s and %s are both for %s", prev, p, pl.String())
+		}
+		seen[pl.String()] = p
+		adds = append(adds, mutate.IndexAddendum{Add: img, Descriptor: v1.Descriptor{Platform: &pl}})
+	}
+	if len(adds) == 0 {
+		return nil, errors.New("an index is built of at least one tarball")
+	}
+	idx := mutate.AppendManifests(mutate.IndexMediaType(empty.Index, kind), adds...)
+	return c.writeTagged(ctx, tag, idx, strings.Join(tarPaths, ", "))
+}
+
+// pushTag is the tag a push writes: the containerizer's reference, a
+// registry's, naming a tag rather than a digest.
+func (c *Containerizer) pushTag() (name.Tag, error) {
+	if c.targetType != "registry" {
+		return name.Tag{}, fmt.Errorf("push needs a registry target, not %s", c.targetType)
+	}
+	if err := c.creds.check(); err != nil {
+		return name.Tag{}, err
+	}
+	ref, err := name.ParseReference(c.registryRef, c.nameOptions()...)
+	if err != nil {
+		return name.Tag{}, fmt.Errorf("invalid target reference %q: %w", c.registryRef, err)
+	}
+	tag, ok := ref.(name.Tag)
+	if !ok {
+		return name.Tag{}, fmt.Errorf("target reference %q names a digest; a push names a tag, the digest is the tarball's", c.registryRef)
+	}
+	return tag, nil
+}
+
+// writeTagged pushes an image or an index under tag and the additional tags.
+func (c *Containerizer) writeTagged(ctx context.Context, tag name.Tag, t pushable, what string) (*Container, error) {
+	jref, err := parseReference(c.registryRef)
+	if err != nil {
+		return nil, err
+	}
 	opts := c.registryOptions(ctx, jref)
 	switch t := t.(type) {
 	case v1.ImageIndex:
@@ -80,7 +158,7 @@ func (c *Containerizer) Push(ctx context.Context, tarPath string) (*Container, e
 		err = remote.Write(tag, t, opts...)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("pushing %s: %w", tarPath, err)
+		return nil, fmt.Errorf("pushing %s: %w", what, err)
 	}
 	tags := []string{tag.TagStr()}
 	for _, extra := range c.additionalTags {

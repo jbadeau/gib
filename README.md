@@ -99,6 +99,23 @@ written with; only the tag is new.
   one of uncompressed layers has them compressed first, so its digest is
   that of the compressed image.
 
+### Push an image for each platform as one index
+
+```sh
+gib build --target=tar://amd64.tar --parameter=arch=amd64 --name=my-app
+gib build --target=tar://arm64.tar --parameter=arch=arm64 --name=my-app
+gib push amd64.tar arm64.tar my-registry.example.com/my-app:1.4.0
+```
+
+Jib lays the same layers on every platform it builds for, so an image
+whose layers differ by platform, a Go program linked for each, is built
+once per platform. `push` given several tarballs, each one image, pushes
+every image with its exact bytes and an image index naming each by the
+platform its config states, in the order given: a Docker manifest list
+of Docker-format images, an OCI index of OCI images. Two images for one
+platform, or images of both formats, are refused. The same images in
+the same order make the same index, so its digest is reproducible.
+
 The reference names a tag; one naming a digest is refused, the digest
 being the tarball's. A tarball holding several tagged images is pushed
 only when exactly one of them is tagged in the reference's repository.
@@ -163,7 +180,7 @@ Registry mirrors are read from Jib's global `config.json`.
 Run `gib build --help` for the full list of options.
 
 ```
-gib push <tarball> <reference> [options]
+gib push <tarball>... <reference> [options]
 ```
 
 | Option | Description |
