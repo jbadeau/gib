@@ -96,6 +96,7 @@ func TestBuild_RefusesTheCommandLinesJibRefuses(t *testing.T) {
 		{[]string{"build", "-t", "x", "--http-trace=most"}, "Invalid value for option '--http-trace': expected one of [off, config, all] (case-sensitive) but was 'most'"},
 		{[]string{"build", "-t", "x", "-p", "a"}, "Value for option '--parameter' (<name>=<value>) should be in KEY=VALUE format but was a"},
 		{[]string{"build", "-t", "x", "--from", ""}, "Value for option '--from' (<base-image>) cannot be empty"},
+		{[]string{"build", "-t", "x", "--platform", "linux"}, "Invalid value for option '--platform': 'linux' is not <os>/<arch>"},
 		{[]string{"build", "-t", "x", "--entrypoint", "/app"}, "Unknown option: '--entrypoint'"},
 		{[]string{"build", "-t", "x", "-x"}, "Unknown option: '-x'"},
 		{[]string{"build", "-t", "x", "--username", "u"}, "Error: Missing required argument(s): --password"},
@@ -146,6 +147,19 @@ func TestBuild_FromReplacesTheBuildFilesBase(t *testing.T) {
 	var m []struct{ Layers []string }
 	require.NoError(t, json.Unmarshal(tarFile(t, filepath.Join(dir, "o.tar"), "manifest.json"), &m))
 	assert.Len(t, m[0].Layers, 2, "the base's layer and the app's")
+}
+
+// --platform, a gib extension, builds for one platform in place of the
+// build file's: an image built once per platform, each its own build.
+func TestBuild_PlatformReplacesTheBuildFilesPlatforms(t *testing.T) {
+	dir := project(t, appBuildFile)
+
+	code, _, errOut := runGib(t, dir, "", "build", "-t", "tar://o.tar", "--name", "app", "-c", "p", "--platform", "linux/arm64")
+
+	require.Equal(t, 0, code, errOut)
+	var cfg struct{ OS, Architecture string }
+	require.NoError(t, json.Unmarshal(tarFile(t, filepath.Join(dir, "o.tar"), "config.json"), &cfg))
+	assert.Equal(t, "linux/arm64", cfg.OS+"/"+cfg.Architecture)
 }
 
 func TestBuild_ReadsTheBuildFileInTheContext(t *testing.T) {
