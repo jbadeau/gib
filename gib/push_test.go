@@ -335,3 +335,100 @@ func TestPush_PicksTheOneImageTaggedInTheReferencesRepository(t *testing.T) {
 	want, _ := b.Digest()
 	assert.Equal(t, want, pushed(t, host+"/acme/b:1.4.0"))
 }
+
+// builtFor builds an image for a platform into a tar, as gib build does.
+func builtFor(t *testing.T, arch string, format ImageFormat) (string, *Container) {
+	t.Helper()
+	file := filepath.Join(t.TempDir(), "image-"+arch+".tar")
+	c, err := FromScratch().AddPlatform(arch, "linux").SetEntrypoint("/app").SetFormat(format).
+		Containerize(context.Background(), ToTar(file, WithTarImageName("acme/app:latest")))
+	require.NoError(t, err)
+	return file, c
+}
+
+func pushIndex(t *testing.T, ref string, tars ...string) (*Container, error) {
+	t.Helper()
+	return ToRegistry(ref, WithAllowInsecureRegistries(true)).PushIndex(context.Background(), tars)
+}
+
+func TestPushIndex_ImagesBuiltPerPlatformArePushedAsOneIndexOfThem(t *testing.T) {
+	for _, tc := range []struct {
+		format ImageFormat
+		index  types.MediaType
+	}{{DockerFormat, types.DockerManifestList}, {OCIFormat, types.OCIImageIndex}} {
+		t.Run(tc.format.String(), func(t *testing.T) {
+			amd, amdBuilt := builtFor(t, "amd64", tc.format)
+			arm, armBuilt := builtFor(t, "arm64", tc.format)
+			ref := serve(t) + "/acme/app:1.4.0"
+
+			out, err := pushIndex(t, ref, amd, arm)
+			require.NoError(t, err)
+
+			r, err := name.ParseReference(ref)
+			require.NoError(t, err)
+			idx, err := remote.Index(r)
+			require.NoError(t, err)
+			require.NoError(t, validate.Index(idx))
+			digest, err := idx.Digest()
+			require.NoError(t, err)
+			assert.Equal(t, out.Digest, digest)
+			mt, err := idx.MediaType()
+			require.NoError(t, err)
+			assert.Equal(t, tc.index, mt)
+			m, err := idx.IndexManifest()
+			require.NoError(t, err)
+			require.Len(t, m.Manifests, 2)
+			assert.Equal(t, "linux/amd64", m.Manifests[0].Platform.String())
+			assert.Equal(t, amdBuilt.Digest, m.Manifests[0].Digest)
+			assert.Equal(t, "linux/arm64", m.Manifests[1].Platform.String())
+			assert.Equal(t, armBuilt.Digest, m.Manifests[1].Digest)
+		})
+	}
+}
+
+func TestPushIndex_TheSameImagesMakeTheSameIndex(t *testing.T) {
+	amd, _ := builtFor(t, "amd64", OCIFormat)
+	arm, _ := builtFor(t, "arm64", OCIFormat)
+	host := serve(t)
+
+	first, err := pushIndex(t, host+"/acme/app:1", amd, arm)
+	require.NoError(t, err)
+	second, err := pushIndex(t, host+"/acme/app:2", amd, arm)
+	require.NoError(t, err)
+
+	assert.Equal(t, first.Digest, second.Digest)
+}
+
+func TestPushIndex_RefusesTwoImagesForOnePlatform(t *testing.T) {
+	a, _ := builtFor(t, "arm64", OCIFormat)
+	b, _ := builtFor(t, "arm64", OCIFormat)
+
+	_, err := pushIndex(t, serve(t)+"/acme/app:1.4.0", a, b)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "both for linux/arm64")
+}
+
+func TestPushIndex_RefusesImagesOfTwoFormats(t *testing.T) {
+	docker, _ := builtFor(t, "amd64", DockerFormat)
+	oci, _ := builtFor(t, "arm64", OCIFormat)
+
+	_, err := pushIndex(t, serve(t)+"/acme/app:1.4.0", docker, oci)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "an index holds images of one format")
+}
+
+func TestPushIndex_RefusesATarballHoldingAnIndex(t *testing.T) {
+	dir := t.TempDir()
+	p, err := layout.Write(dir, empty.Index)
+	require.NoError(t, err)
+	require.NoError(t, p.AppendIndex(index(t, "amd64", "arm64")))
+	tarred := tarDir(t, dir)
+	one, _ := builtFor(t, "amd64", OCIFormat)
+
+	_, err = pushIndex(t, serve(t)+"/acme/app:1.4.0", tarred, one)
+
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "holds an index")
+}

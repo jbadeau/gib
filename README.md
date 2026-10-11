@@ -99,6 +99,23 @@ written with; only the tag is new.
   one of uncompressed layers has them compressed first, so its digest is
   that of the compressed image.
 
+### Push an image for each platform as one index
+
+```sh
+gib build --target=tar://amd64.tar --parameter=arch=amd64 --platform=linux/amd64 --name=my-app
+gib build --target=tar://arm64.tar --parameter=arch=arm64 --platform=linux/arm64 --name=my-app
+gib push amd64.tar arm64.tar my-registry.example.com/my-app:1.4.0
+```
+
+Jib lays the same layers on every platform it builds for, so an image
+whose layers differ by platform, a Go program linked for each, is built
+once per platform. `push` given several tarballs, each one image, pushes
+every image with its exact bytes and an image index naming each by the
+platform its config states, in the order given: a Docker manifest list
+of Docker-format images, an OCI index of OCI images. Two images for one
+platform, or images of both formats, are refused. The same images in
+the same order make the same index, so its digest is reproducible.
+
 The reference names a tag; one naming a digest is refused, the digest
 being the tarball's. A tarball holding several tagged images is pushed
 only when exactly one of them is tagged in the reference's repository.
@@ -132,15 +149,18 @@ gib build --target <image> [options] [@<argfile>...]
 `gib build` takes the options of `jib build`, and refuses what it
 refuses: a command line Jib rejects exits 2, a build that fails exits
 1. The container settings of `jib jar` and `jib war` (`--entrypoint`
-and the like) belong in the build file. One option is gib's own:
+and the like) belong in the build file. Two options are gib's own:
 `--from` builds on another base image than the build file names, such
-as a tarball a sandboxed build is handed in place of a registry pull.
+as a tarball a sandboxed build is handed in place of a registry pull,
+and `--platform` builds for one platform in place of the build file's,
+for an image built once per platform.
 
 | Option | Description |
 |---|---|
 | `-t, --target` | **(required)** Target image: a reference, `registry://<ref>`, `docker://<ref>` or `tar://<path>` |
 | `--name` | The image's name in a tarball (required with `tar://`) |
 | `--from` | The base image, in place of the build file's `from.image` (gib only) |
+| `--platform` | The one platform, `os/arch`, to build for, in place of the build file's `from.platforms` (gib only) |
 | `-b, --build-file` | Build file path (default: `<context>/jib.yaml`) |
 | `-c, --context` | Build context directory (default: `.`) |
 | `-p, --parameter` | Template parameter `name=value` (repeatable) |
@@ -163,7 +183,7 @@ Registry mirrors are read from Jib's global `config.json`.
 Run `gib build --help` for the full list of options.
 
 ```
-gib push <tarball> <reference> [options]
+gib push <tarball>... <reference> [options]
 ```
 
 | Option | Description |

@@ -25,6 +25,7 @@ type buildFlags struct {
 	credentialFlags
 	target, name                     string
 	from                             string
+	platform                         string
 	buildFile, context               string
 	parameters                       map[string]string
 	additionalTags                   []string
@@ -74,6 +75,8 @@ func newBuildCmd(args []string, stdin io.Reader) *cobra.Command {
 		"templating parameter to inject into build file, replace ${<name>} with <value> (repeatable)")
 	str(&f.from, "from", "", "<base-image>",
 		"The base image, in place of the build file's from.image, with the same schemes (a gib extension; Jib's build has no --from)")
+	str(&f.platform, "platform", "", "<os/arch>",
+		"The one platform to build for, in place of the build file's from.platforms (a gib extension; Jib's build has no --platform)")
 	str(&f.name, "name", "", "<image-reference>", "The image reference to inject into the tar configuration (required when using --target tar://...)")
 	fs.Var(&list{values: &f.additionalTags}, "additional-tags", "Additional tags for target image")
 	str(&f.baseImageCache, "base-image-cache", "", "<cache-directory>", "A path to a base image cache")
@@ -160,6 +163,13 @@ func runBuild(cmd *cobra.Command, f *buildFlags, args, positional []string, stdi
 			spec.From = &buildfile.BaseImageSpec{}
 		}
 		spec.From.Image = f.from
+	}
+	if cmd.Flags().Changed("platform") {
+		if spec.From == nil {
+			spec.From = &buildfile.BaseImageSpec{Image: "scratch"}
+		}
+		os, arch, _ := strings.Cut(f.platform, "/")
+		spec.From.Platforms = []buildfile.PlatformSpec{{OS: os, Architecture: arch}}
 	}
 	builder, err := buildfile.Convert(spec, f.context, nil)
 	if err != nil {
@@ -320,6 +330,9 @@ func (f *buildFlags) validate(cmd *cobra.Command, args, positional []string) err
 	}
 	if cmd.Flags().Changed("from") && f.from == "" {
 		return usagef(cmd, "Value for option '--from' (<base-image>) cannot be empty")
+	}
+	if os, arch, ok := strings.Cut(f.platform, "/"); cmd.Flags().Changed("platform") && (!ok || os == "" || arch == "" || strings.Contains(arch, "/")) {
+		return usagef(cmd, "Invalid value for option '--platform': '%s' is not <os>/<arch>", f.platform)
 	}
 	return nil
 }

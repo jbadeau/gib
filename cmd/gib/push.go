@@ -43,8 +43,8 @@ type pushFlags struct {
 func newPushCmd() *cobra.Command {
 	f := &pushFlags{}
 	cmd := &cobra.Command{
-		Use:   "push <tarball> <reference>",
-		Short: "Push an image tarball to a registry, byte for byte",
+		Use:   "push <tarball>... <reference>",
+		Short: "Push image tarballs to a registry, byte for byte",
 		Long: `Push the image an image tarball holds to a registry, tagged <reference>.
 
 Every blob and manifest is pushed with the bytes the tarball holds, so the
@@ -54,10 +54,16 @@ index.json is itself an index of several architectures, as apko writes,
 pushes that index. A docker-save archive (manifest.json only) pushes its
 config and layers under the Docker schema 2 manifest describing them.
 
+Several tarballs, each one image for one platform as a build for that
+platform writes it, are pushed as one image index naming each image by
+the platform its config states, in the order given: a Docker manifest list
+of images in the Docker format, an OCI index of OCI images. Two images for
+one platform, or images of both formats, are refused.
+
 The reference names a tag, never a digest. The pushed digest is printed.`,
-		Args: cobra.ExactArgs(2),
+		Args: cobra.MinimumNArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runPush(cmd, f, args[0], args[1])
+			return runPush(cmd, f, args[:len(args)-1], args[len(args)-1])
 		},
 	}
 	cmd.Flags().StringVar(&f.credentialHelper, "credential-helper", "", "credential helper, a path to one or the suffix of docker-credential-<suffix>")
@@ -71,12 +77,19 @@ The reference names a tag, never a digest. The pushed digest is printed.`,
 	return cmd
 }
 
-func runPush(cmd *cobra.Command, f *pushFlags, tarPath, ref string) error {
+func runPush(cmd *cobra.Command, f *pushFlags, tarPaths []string, ref string) error {
 	opts := f.targetCredentials(cmd.Flags().Changed)
 	opts = append(opts,
 		gib.WithAllowInsecureRegistries(f.allowInsecureRegistries),
 		gib.WithSendCredentialsOverHTTP(f.sendCredentialsOverHTTP))
-	result, err := gib.ToRegistry(ref, opts...).Push(cmd.Context(), tarPath)
+	c := gib.ToRegistry(ref, opts...)
+	var result *gib.Container
+	var err error
+	if len(tarPaths) == 1 {
+		result, err = c.Push(cmd.Context(), tarPaths[0])
+	} else {
+		result, err = c.PushIndex(cmd.Context(), tarPaths)
+	}
 	if err != nil {
 		return err
 	}
